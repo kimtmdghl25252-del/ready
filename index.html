@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        :root { --bg-color: #121212; --card-bg: #1e1e1e; --text-main: #ffffff; --text-sub: #aaaaaa; --accent-blue: #3e91ff; }
+        :root { --bg-color: #121212; --card-bg: #1e1e1e; --text-main: #ffffff; --text-sub: #aaaaaa; --accent-blue: #3e91ff; --alert-red: #ff4d4d; }
         body { margin: 0; padding: 0; background-color: var(--bg-color); color: var(--text-main); font-family: sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
         #initial-screen { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 30px; padding: 40px; }
         .large-btn { width: 100%; height: 120px; background-color: var(--card-bg); border: 2px solid #333; border-radius: 25px; color: var(--text-main); font-size: 22px; font-weight: bold; display: flex; justify-content: center; align-items: center; gap: 15px; cursor: pointer; box-shadow: 0 8px 15px rgba(0,0,0,0.4); }
@@ -16,7 +16,8 @@
         #result-screen { display: none; padding: 20px; flex-direction: column; gap: 20px; padding-bottom: 40px; }
         .card { background-color: var(--card-bg); border-radius: 20px; padding: 20px; border: 1px solid #2a2a2a; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
         #safety-time { font-size: 45px; font-weight: 900; color: var(--accent-blue); margin: 10px 0; }
-        .outfit-row { display: flex; align-items: center; gap: 15px; padding: 15px; background: #2a2a2a; border-radius: 15px; margin-bottom: 10px; }
+        .outfit-row { display: flex; align-items: center; gap: 15px; padding: 15px; background: #2a2a2a; border-radius: 15px; margin-bottom: 10px; line-height: 1.4; }
+        .station-option { background: #2a2a2a; padding: 12px; border-radius: 10px; margin-top: 8px; font-size: 14px; }
     </style>
 </head>
 <body>
@@ -42,7 +43,7 @@
             <div id="outfit-list"></div>
         </div>
         <div class="card" id="rain-card">
-            <div style="font-size:16px; margin-bottom:10px; font-weight:bold;">☂️ 목적지 시간별 강수 확률</div>
+            <div style="font-size:16px; margin-bottom:10px; font-weight:bold;">☂️ 목적지 강수 확률 (40% 이상 주의)</div>
             <div style="height:200px;"><canvas id="rainChart"></canvas></div>
         </div>
     </div>
@@ -77,10 +78,10 @@
 
                 state.targetTime = parseInt(timeMatch[1]);
                 state.placeName = text.replace(timeMatch[0], "").replace(/[.,]/g, "").trim();
-                document.getElementById('loading-text').innerHTML = `<b>'${state.placeName}'</b><br>최적의 경로와 날씨를 찾는 중...`;
+                document.getElementById('loading-text').innerHTML = `<b>'${state.placeName}'</b><br>데이터를 수집하는 중...`;
 
                 try {
-                    // 1. 카카오 장소 검색 (프록시 우회)
+                    // 1. 카카오 장소 검색
                     const kakaoUrl = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(state.placeName)}`;
                     const kakaoProxy = `https://corsproxy.io/?${encodeURIComponent(kakaoUrl)}`;
                     
@@ -92,23 +93,33 @@
                     }
                     state.targetCoords = { x: kakaoData.documents[0].x, y: kakaoData.documents[0].y };
 
-                    // 2. 오디세이 교통 정보 (직통 연결)
+                    // [추가] 1-1. '지하철역' 모드일 경우 주변 역 탐색
+                    let nearbyStations = [];
+                    if (state.destMode === 'station') {
+                        const swUrl = `https://dapi.kakao.com/v2/local/search/category.json?category_group_code=SW8&x=${state.targetCoords.x}&y=${state.targetCoords.y}&radius=1500&sort=distance`;
+                        const swProxy = `https://corsproxy.io/?${encodeURIComponent(swUrl)}`;
+                        const swRes = await fetch(swProxy, { headers: { 'Authorization': `KakaoAK ${KAKAO_KEY}` } }).catch(() => null);
+                        if (swRes) {
+                            const swData = await swRes.json();
+                            if (swData.documents) nearbyStations = swData.documents.slice(0, 3); // 최대 3개 옵션
+                        }
+                    }
+
+                    // 2. 오디세이 교통 정보
                     const encodedOdsayKey = encodeURIComponent(ODSAY_KEY);
                     const odAUrl = `https://api.odsay.com/v1/api/searchPubTransPathT?SX=${SANGIL_SUBWAY.sx}&SY=${SANGIL_SUBWAY.sy}&EX=${state.targetCoords.x}&EY=${state.targetCoords.y}&apiKey=${encodedOdsayKey}`;
                     const odBUrl = `https://api.odsay.com/v1/api/searchPubTransPathT?SX=${SANGIL_BUS.sx}&SY=${SANGIL_BUS.sy}&EX=${state.targetCoords.x}&EY=${state.targetCoords.y}&apiKey=${encodedOdsayKey}`;
 
-                    // 3. 기상청 날씨 (오타 수정된 주소 + 프록시 우회)
+                    // 3. 기상청 날씨
                     const now = new Date();
-                    const kst = new Date(now.getTime() + (9 * 60 * 60 * 1000)); // 한국 시간
+                    const kst = new Date(now.getTime() + (9 * 60 * 60 * 1000));
                     const dateStr = kst.toISOString().slice(0,10).replace(/-/g,"");
                     
-                    // Frcst -> Fcst 오타 수정 완료!
                     const kmaUrl = `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${KMA_KEY}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${dateStr}&base_time=0200&nx=62&ny=126`;
                     const kmaProxy = `https://corsproxy.io/?${encodeURIComponent(kmaUrl)}`;
 
-                    // 세 데이터를 동시에 가져오기
                     const [weatherRes, routeARes, routeBRes] = await Promise.all([
-                        fetch(kmaProxy).catch(() => null), // 날씨 실패해도 앱 안 멈추게 방어
+                        fetch(kmaProxy).catch(() => null),
                         fetch(odAUrl).catch(() => null),
                         fetch(odBUrl).catch(() => null)
                     ]);
@@ -117,7 +128,7 @@
                     const rA = routeARes ? await routeARes.json() : null;
                     const rB = routeBRes ? await routeBRes.json() : null;
 
-                    updateFinalUI(weatherData, rA, rB);
+                    updateFinalUI(weatherData, rA, rB, nearbyStations);
 
                 } catch (err) {
                     alert(err.message);
@@ -126,21 +137,21 @@
             };
 
             recognition.onerror = () => {
-                alert("음성 인식에 실패했습니다. 주변이 시끄럽거나 권한이 없습니다.");
+                alert("음성 인식 실패. 주변이 시끄럽거나 마이크 권한이 없습니다.");
                 location.reload();
             };
 
             recognition.start();
         }
 
-        function updateFinalUI(weather, rA, rB) {
-            // 교통 비교 로직
+        function updateFinalUI(weather, rA, rB, nearbyStations) {
+            // 교통 로직
             const tA = (rA && rA.result) ? rA.result.path[0].info.totalTime : 999;
             const tB = (rB && rB.result) ? rB.result.path[0].info.totalTime : 999;
             
             if (tA === 999 && tB === 999) {
                 document.getElementById('safety-time').innerText = "조회 불가";
-                document.getElementById('route-detail').innerHTML = "현재 대중교통 노선이 없거나<br>서버 응답이 없습니다.";
+                document.getElementById('route-detail').innerHTML = "현재 노선이 없거나 서버 응답 지연 중입니다.";
             } else {
                 const useBus = (tA - tB >= 15);
                 const final = useBus ? { name: SANGIL_BUS.name, time: tB, margin: 25 } : { name: SANGIL_SUBWAY.name, time: tA, margin: 10 };
@@ -152,37 +163,68 @@
                 const mins = String(depTime.getMinutes()).padStart(2, '0');
                 
                 document.getElementById('safety-time').innerText = `${hours}:${mins}`;
-                document.getElementById('route-detail').innerHTML = `<b>${final.name}</b>에서 탑승하세요.<br>(이동 ${final.time}분 + 여유시간 ${final.margin}분 반영됨)`;
+                
+                let detailHtml = `<b>${final.name}</b>에서 탑승하세요.<br>(이동 ${final.time}분 + 여유시간 ${final.margin}분 반영됨)`;
+
+                // [추가] 목적지 주변 지하철역 옵션 표시
+                if (state.destMode === 'station' && nearbyStations.length > 0) {
+                    detailHtml += `<div style="margin-top:15px; border-top:1px solid #444; padding-top:10px;">`;
+                    detailHtml += `<div style="color:var(--accent-blue); font-weight:bold; margin-bottom:5px;">🚇 도착지 주변 지하철역 리스트</div>`;
+                    nearbyStations.forEach(st => {
+                        // 1분당 약 67m 도보 이동 계산
+                        const walkTime = Math.ceil(st.distance / 67); 
+                        detailHtml += `<div class="station-option"><b>${st.place_name}</b><br>목적지까지 도보 약 ${walkTime}분 (${st.distance}m)</div>`;
+                    });
+                    detailHtml += `</div>`;
+                }
+
+                document.getElementById('route-detail').innerHTML = detailHtml;
             }
 
-            // 날씨 및 옷차림 로직
+            // 날씨 및 옷차림 스펙트럼 로직
             const items = (weather && weather.response && weather.response.body) ? weather.response.body.items.item : [];
             if(items.length > 0) {
-                const tmpItems = items.filter(i => i.category === 'TMP');
-                const maxTemp = Math.max(...tmpItems.map(i => parseInt(i.fcstValue)));
+                const tmpItems = items.filter(i => i.category === 'TMP').map(i => parseInt(i.fcstValue));
+                const maxTemp = Math.max(...tmpItems);
+                const minTemp = Math.min(...tmpItems);
+                const diff = maxTemp - minTemp; // 일교차 계산
                 
-                let outfitMsg = maxTemp >= 23 ? "반팔, 얇은 셔츠" : maxTemp >= 20 ? "가디건, 면바지" : maxTemp >= 17 ? "맨투맨, 청바지" : maxTemp >= 12 ? "자켓, 야상" : "코트, 따뜻한 겉옷";
-                document.getElementById('outfit-list').innerHTML = `<div class="outfit-row"><i class="fas fa-tshirt" style="font-size:30px; color:#ff9f43;"></i> <div><b>최고 ${maxTemp}°C</b><br>${outfitMsg} 챙기시면 좋습니다.</div></div>`;
+                let baseOutfit = maxTemp >= 23 ? "반팔, 얇은 셔츠" : maxTemp >= 20 ? "가디건, 면바지" : maxTemp >= 17 ? "맨투맨, 청바지" : maxTemp >= 12 ? "자켓, 야상" : "두꺼운 코트, 패딩";
+                
+                let outfitMsg = "";
+                if (diff >= 8 && maxTemp >= 15) {
+                    outfitMsg = `일교차가 <b>${diff}도</b>로 큽니다!<br>낮(최고 ${maxTemp}°)엔 ${baseOutfit} 위주로 입으시고, 아침/밤(최저 ${minTemp}°)을 대비해 입고 벗기 편한 겉옷을 꼭 챙기세요.`;
+                } else {
+                    outfitMsg = `최고 ${maxTemp}° / 최저 ${minTemp}°<br>${baseOutfit} 챙기시면 좋습니다.`;
+                }
 
+                document.getElementById('outfit-list').innerHTML = `<div class="outfit-row"><i class="fas fa-temperature-half" style="font-size:30px; color:#ff9f43;"></i> <div>${outfitMsg}</div></div>`;
+
+                // [변경] 강수 확률 그래프 (40% 이상 빨간색 강조)
                 const popItems = items.filter(i => i.category === 'POP').slice(0, 10);
+                
+                // 40% 이상이면 빨간색, 아니면 파란색
+                const bgColors = popItems.map(i => parseInt(i.fcstValue) >= 40 ? 'rgba(255, 77, 77, 0.8)' : 'rgba(62, 145, 255, 0.5)');
+
                 new Chart(document.getElementById('rainChart'), {
-                    type: 'line',
+                    type: 'bar', // 명확하게 보이기 위해 막대그래프로 변경
                     data: {
                         labels: popItems.map(i => i.fcstTime.slice(0,2) + '시'),
                         datasets: [{
                             label: '강수확률(%)',
                             data: popItems.map(i => parseInt(i.fcstValue)),
-                            borderColor: '#3e91ff',
-                            backgroundColor: 'rgba(62, 145, 255, 0.2)',
-                            borderWidth: 3,
-                            fill: true,
-                            tension: 0.3
+                            backgroundColor: bgColors,
+                            borderRadius: 5
                         }]
                     },
-                    options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100 } } }
+                    options: { 
+                        maintainAspectRatio: false, 
+                        plugins: { legend: { display: false } }, 
+                        scales: { y: { min: 0, max: 100 } } 
+                    }
                 });
             } else {
-                document.getElementById('outfit-list').innerHTML = `<div style="padding: 10px; color: var(--text-sub);">현재 기상청 데이터를 불러올 수 없습니다.</div>`;
+                document.getElementById('outfit-list').innerHTML = `<div style="padding: 10px; color: var(--text-sub);">현재 날씨 데이터를 불러올 수 없습니다.</div>`;
                 document.getElementById('rain-card').style.display = 'none';
             }
 
