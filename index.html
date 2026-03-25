@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 프리미엄 외출 비서 (디버깅 모드)</title>
+    <title>S26 프리미엄 비서 (디버깅 모드)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -12,8 +12,8 @@
         #initial-screen { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 30px; padding: 40px; }
         .large-btn { width: 100%; height: 120px; background-color: var(--card-bg); border: 2px solid #333; border-radius: 25px; color: var(--text-main); font-size: 22px; font-weight: bold; display: flex; justify-content: center; align-items: center; gap: 15px; cursor: pointer; }
         #loading-screen { display: none; flex: 1; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; color: var(--text-sub); }
-        #debug-log { background: #000; color: #00ff00; padding: 15px; border-radius: 10px; font-family: monospace; font-size: 12px; margin: 20px; white-space: pre-wrap; word-wrap: break-word; display: none; border: 1px solid #333; }
-        #result-screen { display: none; padding: 20px; flex-direction: column; gap: 20px; padding-bottom: 40px; }
+        #debug-log { background: #000; color: #00ff00; padding: 15px; border-radius: 10px; font-family: monospace; font-size: 12px; margin: 20px; white-space: pre-wrap; word-wrap: break-word; display: none; border: 1px solid #333; max-height: 400px; overflow-y: auto; }
+        #result-screen { display: none; padding: 20px; flex-direction: column; gap: 20px; padding-bottom: 40px; text-align: center; }
     </style>
 </head>
 <body>
@@ -24,13 +24,14 @@
 
     <div id="loading-screen">
         <i class="fas fa-spinner fa-spin" style="font-size:50px; color:var(--accent-blue); margin-bottom:20px;"></i>
-        <div id="loading-text">장소를 말씀해주세요...</div>
+        <div id="loading-text">장소와 시간을 말씀해주세요...</div>
     </div>
 
     <div id="debug-log"></div>
 
     <div id="result-screen">
-        <h3 style="text-align:center; color: var(--accent-blue);">정상 작동 성공!</h3>
+        <h2 style="color: var(--accent-blue);">🎉 통신 완벽 성공! 🎉</h2>
+        <p>모든 데이터가 정상적으로 들어옵니다.<br>이제 실제 비서 화면 코드로 넘어가셔도 됩니다!</p>
     </div>
 
     <script>
@@ -41,12 +42,13 @@
         const SANGIL_SUBWAY = { name: "상일동역", sx: 127.1735, sy: 37.5519 };
         let state = { placeName: null, targetTime: null, targetCoords: null };
 
-        // 화면에 로그를 찍는 함수
+        // 로그 찍는 함수
         function logDebug(title, message) {
             const logDiv = document.getElementById('debug-log');
             logDiv.style.display = 'block';
             logDiv.innerHTML += `<b>[${title}]</b>\n${message}\n\n`;
             console.log(`[${title}]`, message);
+            logDiv.scrollTop = logDiv.scrollHeight; // 스크롤 맨 아래로
         }
 
         async function fetchWithDebug(name, url, options = {}) {
@@ -56,15 +58,22 @@
                 
                 if (!response.ok) {
                     const errorText = await response.text();
-                    logDebug(name + " 실패 (HTTP " + response.status + ")", errorText);
+                    logDebug(name + " HTTP 실패 (" + response.status + ")", errorText);
                     throw new Error(`${name} 서버 에러: HTTP ${response.status}`);
                 }
                 
                 const data = await response.json();
+                
+                // 오디세이 전용 에러 체크 (200 OK로 들어와도 에러일 수 있음)
+                if (name.includes("오디세이") && data.error) {
+                    logDebug(name + " API 권한 오류", JSON.stringify(data.error));
+                    throw new Error(`오디세이 권한 에러: 사이트 도메인 등록 필요`);
+                }
+
                 logDebug(name + " 성공 응답", JSON.stringify(data).substring(0, 200) + "... (생략됨)");
                 return data;
             } catch (error) {
-                logDebug(name + " 완전 실패 (CORS 또는 네트워크)", error.message);
+                logDebug(name + " 완전 실패", error.message);
                 throw error;
             }
         }
@@ -72,7 +81,7 @@
         function startProcess(mode) {
             document.getElementById('initial-screen').style.display = 'none';
             document.getElementById('loading-screen').style.display = 'flex';
-            document.getElementById('debug-log').innerHTML = ''; // 로그 초기화
+            document.getElementById('debug-log').innerHTML = ''; 
             
             const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
             recognition.lang = 'ko-KR';
@@ -92,7 +101,7 @@
                 document.getElementById('loading-text').innerHTML = `<b>'${state.placeName}'</b> 추적 중...`;
 
                 try {
-                    // 1. 카카오 검색 (우회 프록시 사용)
+                    // 1. 카카오맵 (프록시 적용)
                     const kakaoUrl = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(state.placeName)}`;
                     const kakaoProxy = `https://corsproxy.io/?${encodeURIComponent(kakaoUrl)}`;
                     
@@ -105,23 +114,34 @@
                     }
                     state.targetCoords = { x: kakaoData.documents[0].x, y: kakaoData.documents[0].y };
 
-                    // 2. 오디세이 (교통) - 프록시 없이 직접 호출 테스트
+                    // 2. 오디세이 (직접 호출 - 단, ODsay LAB에 도메인 등록 필수!)
                     const encodedOdsayKey = encodeURIComponent(ODSAY_KEY);
                     const odAUrl = `https://api.odsay.com/v1/api/searchPubTransPathT?SX=${SANGIL_SUBWAY.sx}&SY=${SANGIL_SUBWAY.sy}&EX=${state.targetCoords.x}&EY=${state.targetCoords.y}&apiKey=${encodedOdsayKey}`;
                     await fetchWithDebug("오디세이(교통)", odAUrl);
 
-                    // 3. 기상청 (날씨) - 프록시 없이 직접 호출 테스트
-                    const dateStr = new Date().toISOString().slice(0,10).replace(/-/g,"");
-                    const kmaUrl = `https://apis.data.go.kr/1360000/VilageFrcstInfoService_2.0/getVilageFrcst?serviceKey=${KMA_KEY}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${dateStr}&base_time=0200&nx=62&ny=126`;
-                    await fetchWithDebug("기상청(날씨)", kmaUrl);
+                    // 3. 기상청 (프록시 적용 - CORS 우회용)
+                    // 현재 KST 날짜 구하기 (한국 시간 기준)
+                    const now = new Date();
+                    const kst = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+                    const dateStr = kst.toISOString().slice(0,10).replace(/-/g,"");
 
+                    const kmaUrl = `https://apis.data.go.kr/1360000/VilageFrcstInfoService_2.0/getVilageFrcst?serviceKey=${KMA_KEY}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${dateStr}&base_time=0200&nx=62&ny=126`;
+                    const kmaProxy = `https://corsproxy.io/?${encodeURIComponent(kmaUrl)}`;
+                    await fetchWithDebug("기상청(날씨)", kmaProxy);
+
+                    // 모든 관문 통과!
                     document.getElementById('loading-screen').style.display = 'none';
                     document.getElementById('result-screen').style.display = 'flex';
 
                 } catch (err) {
-                    alert("에러 발생! 검은색 디버그 로그 창을 확인해주세요.\n" + err.message);
+                    alert("오류 발생! 화면의 검은색 로그를 확인해주세요.");
                     document.getElementById('loading-screen').style.display = 'none';
                 }
+            };
+
+            recognition.onerror = () => {
+                alert("음성 인식 실패. 다시 시도해주세요.");
+                location.reload();
             };
 
             recognition.start();
