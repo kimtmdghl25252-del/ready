@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 외출 비서 v4.0</title>
+    <title>S26 외출 비서 v4.1</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        :root { --bg: #121212; --card: #1e1e1e; --text: #ffffff; --sub: #aaaaaa; --blue: #3e91ff; --red: #ff4d4d; --green: #2ecc71; }
+        :root { --bg: #121212; --card: #1e1e1e; --text: #ffffff; --sub: #aaaaaa; --blue: #3e91ff; --red: #ff4d4d; }
         body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
         .screen { display: none; flex-direction: column; min-height: 100vh; padding: 20px; box-sizing: border-box; }
         .active { display: flex; }
         .btn-large { width: 100%; height: 100px; background: var(--card); border: 1px solid #333; border-radius: 20px; color: var(--text); font-size: 20px; font-weight: bold; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 15px; cursor: pointer; }
         .btn-station { width: 100%; background: #252525; border: 1px solid var(--blue); border-radius: 15px; padding: 15px; color: white; margin-bottom: 10px; text-align: left; }
-        .card { background: var(--card); border-radius: 25px; padding: 20px; margin-bottom: 20px; border: 1px solid #2a2a2a; box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
+        .card { background: var(--card); border-radius: 25px; padding: 20px; margin-bottom: 20px; border: 1px solid #2a2a2a; }
         #safety-time { font-size: 56px; font-weight: 900; color: var(--blue); margin: 5px 0; letter-spacing: -2px; }
         .route-box { background: #1a1a1a; border-left: 4px solid var(--blue); padding: 18px; margin-top: 15px; font-size: 14px; line-height: 1.8; border-radius: 0 15px 15px 0; }
         .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: bold; margin-right: 6px; }
@@ -25,37 +25,33 @@
 <body>
 
     <div id="sc-main" class="screen active" style="justify-content: center;">
-        <div style="text-align: center; margin-bottom: 30px;">
-            <h1 style="font-size: 24px; margin: 0;">S26 Premium</h1>
-            <p style="color: var(--sub); margin: 5px 0;">도보 1분 컷 정밀 비서</p>
-        </div>
         <button class="btn-large" onclick="init('direct')"><i class="fas fa-location-arrow"></i> 목적지 바로 앞까지</button>
         <button class="btn-large" onclick="init('station')"><i class="fas fa-train-subway"></i> 근처 지하철역까지만</button>
     </div>
 
     <div id="sc-load" class="screen" style="justify-content: center; align-items: center;">
         <i class="fas fa-circle-notch fa-spin" style="font-size: 60px; color: var(--blue); margin-bottom: 25px;"></i>
-        <div id="load-msg" style="font-size: 18px; font-weight: bold;">최적의 경로 분석 중...</div>
+        <div id="load-msg" style="font-size: 18px; font-weight: bold;">분석 중...</div>
     </div>
 
     <div id="sc-select" class="screen">
-        <h2 style="color: var(--blue); padding: 10px;">하차할 역을 선택하세요</h2>
+        <h2 style="color: var(--blue); padding: 10px;">하차역 선택</h2>
         <div id="station-list"></div>
     </div>
 
     <div id="sc-result" class="screen">
         <div class="card" style="border-top: 6px solid var(--blue);">
-            <div style="font-size: 15px; color: var(--sub); font-weight: bold;">권장 출발 시각</div>
+            <div style="font-size: 15px; color: var(--sub); font-weight: bold;">최종 출발 시각</div>
             <div id="safety-time">--:--</div>
             <div id="summary" style="font-size: 16px; margin: 8px 0;"></div>
             <div id="route-steps" class="route-box"></div>
         </div>
         <div class="card">
-            <h3 style="margin:0 0 15px 0; font-size: 16px;"><i class="fas fa-tshirt" style="color: var(--blue);"></i> 활동 시간 옷차림</h3>
+            <h3 style="margin:0 0 15px 0; font-size: 16px;">🌡️ 활동 시간 옷차림</h3>
             <div id="outfit-info"></div>
         </div>
         <div class="card">
-            <h3 style="margin:0 0 15px 0; font-size: 16px;"><i class="fas fa-umbrella" style="color: var(--blue);"></i> 시간별 강수 확률</h3>
+            <h3 style="margin:0 0 15px 0; font-size: 16px;">☂️ 강수 확률</h3>
             <div style="height: 180px;"><canvas id="chart"></canvas></div>
         </div>
     </div>
@@ -63,7 +59,7 @@
     <script>
         const KEY = { K: '56b6a0adbc28cab6f7c87ac9f84b14d0', M: 'ddfd71d0b929827fd9c3c1851b50c301f9afb482a3143c0b39e135f9b3b8f070', O: 'Rdv6LaA8z0P2BHkKrh/DsA' };
         
-        // [업데이트] 수단별 정밀 출발 좌표 세팅
+        // [좌표 고정] 수단별 출발 위치
         const POS = {
             BUS: { name: "상일동역 1번출구(버스)", x: 127.164253, y: 37.556658 },
             SUB: { name: "상일동역 1번출구(지하철)", x: 127.165972, y: 37.556711 }
@@ -115,7 +111,7 @@
             const filtered = list.filter(s => (s.distance/67) <= 15);
             cont.innerHTML = filtered.length ? filtered.map(s => `
                 <button class="btn-station" onclick="selectSt('${s.x}','${s.y}',${Math.ceil(s.distance/67)})">
-                    <b>${s.place_name}</b><br>내려서 도보 ${Math.ceil(s.distance/67)}분
+                    <b>${s.place_name}</b><br>하차 후 도보 ${Math.ceil(s.distance/67)}분
                 </button>
             `).join('') : `<button class="btn-station" onclick="selectSt('${dx}','${dy}',0)">목적지로 바로 안내</button>`;
         }
@@ -127,7 +123,7 @@
         }
 
         async function fetchData(ex, ey) {
-            // 지하철 기준 좌표로 우선 조회 (나중에 필터링에서 수단별 좌표 적용)
+            // 지하철 좌표로 기본 쿼리 (필터링 로직에서 수단별 좌표 적용)
             const oUrl = `https://api.odsay.com/v1/api/searchPubTransPathT?SX=${POS.SUB.x}&SY=${POS.SUB.y}&EX=${ex}&EY=${ey}&apiKey=${encodeURIComponent(KEY.O)}`;
             const date = new Date(new Date().getTime() + 32400000).toISOString().slice(0,10).replace(/-/g,"");
             const wUrl = `https://corsproxy.io/?${encodeURIComponent(`https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${KEY.M}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${date}&base_time=0200&nx=62&ny=126`)}`;
@@ -139,15 +135,16 @@
         function renderFinal(r, w) {
             setSc('sc-result');
             
-            // [강력 필터링] 첫 도보가 1분 이하인 경로만 추출
+            // [도보 1분 제한 필터링]
             const paths = r.result?.path?.filter(p => p.subPath[0].trafficType !== 3 || p.subPath[0].sectionTime <= 1) || [];
             
             const subways = paths.filter(p => p.pathType === 1).sort((a,b) => a.info.totalTime - b.info.totalTime);
             const buses = paths.filter(p => p.pathType !== 1).sort((a,b) => a.info.totalTime - b.info.totalTime);
 
             let best = subways[0];
-            // 버스가 지하철보다 15분 이상 빠를 때만 버스 선택
-            if(buses[0] && (!subways[0] || (subways[0].info.totalTime - buses[0].info.totalTime >= 15))) {
+            
+            // [12분 마진 로직] 버스가 지하철보다 12분 이상 빠를 때만 버스 선택
+            if(buses[0] && (!subways[0] || (subways[0].info.totalTime - buses[0].info.totalTime >= 12))) {
                 best = buses[0];
             }
 
@@ -170,7 +167,7 @@
                 <b>${i===0?startPoint.name:s.startName}</b> 탑승 ➔ <b>${s.endName}</b> 하차</div>
             `).join('<div class="transfer-icon">▼ 환승</div>') + (app.walk > 0 ? `<div style="margin-top:10px; color:#ff9f43; font-weight:bold;">🚶 하차 후 최종지 도보 ${app.walk}분</div>` : '');
 
-            // 날씨 로직
+            // 날씨
             const items = w.response?.body?.items?.item || [];
             const v = items.filter(i => i.fcstTime >= String(app.time).padStart(2,'0')+"00" && i.fcstTime <= "2200");
             if(v.length) {
