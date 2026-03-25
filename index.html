@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 외출 비서 v3.0</title>
+    <title>S26 외출 비서 v3.1</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -11,62 +11,69 @@
         body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
         .screen { display: none; flex-direction: column; min-height: 100vh; padding: 20px; box-sizing: border-box; }
         .active { display: flex; }
-        .btn-large { width: 100%; height: 100px; background: var(--card); border: 1px solid #333; border-radius: 20px; color: var(--text); font-size: 20px; font-weight: bold; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 15px; cursor: pointer; }
+        .btn-large { width: 100%; height: 100px; background: var(--card); border: 1px solid #333; border-radius: 20px; color: var(--text); font-size: 20px; font-weight: bold; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 15px; cursor: pointer; transition: 0.2s; }
+        .btn-large:active { transform: scale(0.96); background: #252525; }
         .btn-station { width: 100%; background: #252525; border: 1px solid var(--blue); border-radius: 15px; padding: 15px; color: white; margin-bottom: 10px; text-align: left; }
-        .card { background: var(--card); border-radius: 25px; padding: 20px; margin-bottom: 20px; border: 1px solid #2a2a2a; }
-        #safety-time { font-size: 52px; font-weight: 900; color: var(--blue); margin: 5px 0; letter-spacing: -2px; }
-        .route-box { background: #1a1a1a; border-left: 4px solid var(--blue); padding: 15px; margin-top: 15px; font-size: 14px; line-height: 1.7; border-radius: 0 15px 15px 0; }
+        .card { background: var(--card); border-radius: 25px; padding: 20px; margin-bottom: 20px; border: 1px solid #2a2a2a; box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
+        #safety-time { font-size: 56px; font-weight: 900; color: var(--blue); margin: 5px 0; letter-spacing: -2px; text-shadow: 0 0 15px rgba(62, 145, 255, 0.3); }
+        .route-box { background: #1a1a1a; border-left: 4px solid var(--blue); padding: 18px; margin-top: 15px; font-size: 14px; line-height: 1.8; border-radius: 0 15px 15px 0; }
         .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: bold; margin-right: 6px; }
         .b-subway { background: var(--blue); }
         .b-bus { background: var(--red); }
-        .map-link { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 15px; background: var(--green); color: white; border-radius: 15px; text-decoration: none; font-weight: bold; margin-top: 15px; }
+        .map-link { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 16px; background: var(--green); color: white; border-radius: 18px; text-decoration: none; font-weight: bold; margin-top: 10px; font-size: 16px; }
     </style>
 </head>
 <body>
 
     <div id="sc-main" class="screen active" style="justify-content: center;">
-        <button class="btn-large" onclick="init('direct')"><i class="fas fa-location-dot"></i> 목적지 바로 앞까지</button>
-        <button class="btn-large" onclick="init('station')"><i class="fas fa-subway"></i> 근처 지하철역까지만</button>
+        <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="font-size: 24px; margin: 0;">S26 Premium</h1>
+            <p style="color: var(--sub); margin: 5px 0;">사용자 맞춤형 외출 비서</p>
+        </div>
+        <button class="btn-large" onclick="init('direct')"><i class="fas fa-location-arrow"></i> 목적지 바로 앞까지</button>
+        <button class="btn-large" onclick="init('station')"><i class="fas fa-train-subway"></i> 근처 지하철역까지만</button>
     </div>
 
     <div id="sc-load" class="screen" style="justify-content: center; align-items: center;">
-        <i class="fas fa-circle-notch fa-spin" style="font-size: 50px; color: var(--blue); margin-bottom: 20px;"></i>
-        <div id="load-msg" style="font-weight: bold;">분석 중...</div>
+        <i class="fas fa-compass fa-spin" style="font-size: 60px; color: var(--blue); margin-bottom: 25px;"></i>
+        <div id="load-msg" style="font-size: 18px; font-weight: bold; letter-spacing: -0.5px;">최적의 경로를 분석 중입니다...</div>
     </div>
 
     <div id="sc-select" class="screen">
-        <h2 style="color: var(--blue); margin-left: 10px;">어느 역에 내릴까요?</h2>
+        <h2 style="color: var(--blue); padding: 10px;">어느 역에서 하차할까요?</h2>
         <div id="station-list"></div>
     </div>
 
     <div id="sc-result" class="screen">
-        <div class="card" style="border-top: 5px solid var(--blue);">
-            <div style="font-size: 14px; color: var(--sub); font-weight: bold;">추천 출발 시각</div>
-            <div id="safety-time">--:--</div>
-            <div id="summary" style="font-size: 15px; margin-top: 5px;"></div>
+        <div class="card" style="border-top: 6px solid var(--blue);">
+            <div style="font-size: 15px; color: var(--sub); font-weight: bold;">집에서 나가야 할 시각</div>
+            <div id="safety-time">00:00</div>
+            <div id="summary" style="font-size: 16px; margin: 8px 0;"></div>
             
             <a id="map-btn" href="#" target="_blank" class="map-link">
-                <i class="fas fa-map"></i> 지도에서 경로 보기
+                <i class="fas fa-map-marked-alt"></i> 실시간 경로 지도 보기
             </a>
 
             <div id="route-steps" class="route-box"></div>
         </div>
 
         <div class="card">
-            <h3 style="margin:0 0 15px 0; font-size: 16px;"><i class="fas fa-shirt"></i> 활동 시간대 옷차림</h3>
-            <div id="outfit-info"></div>
+            <h3 style="margin:0 0 15px 0; font-size: 16px;"><i class="fas fa-tshirt" style="color: var(--blue);"></i> 추천 옷차림</h3>
+            <div id="outfit-info" style="font-size: 15px; line-height: 1.6;"></div>
         </div>
 
         <div class="card">
-            <h3 style="margin:0 0 15px 0; font-size: 16px;"><i class="fas fa-cloud-showers-heavy"></i> 강수 확률</h3>
+            <h3 style="margin:0 0 15px 0; font-size: 16px;"><i class="fas fa-umbrella" style="color: var(--blue);"></i> 시간별 강수 확률</h3>
             <div style="height: 180px;"><canvas id="chart"></canvas></div>
         </div>
     </div>
 
     <script>
         const KEY = { K: '56b6a0adbc28cab6f7c87ac9f84b14d0', M: 'ddfd71d0b929827fd9c3c1851b50c301f9afb482a3143c0b39e135f9b3b8f070', O: 'Rdv6LaA8z0P2BHkKrh/DsA' };
-        const HOME = { name: "상일동역 1번출구", x: 127.1741, y: 37.5524 };
-        let app = { mode: '', time: 0, place: '', walk: 0, destX: 0, destY: 0 };
+        
+        // [업데이트] 요청하신 새로운 좌표 반영 (상일동 인근)
+        const HOME = { name: "현재 설정 위치", x: 127.164802, y: 37.556636 };
+        let app = { mode: '', time: 0, place: '', walk: 0, dx: 0, dy: 0 };
 
         function setSc(id) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -81,7 +88,7 @@
             rec.onresult = async (e) => {
                 const txt = e.results[0][0].transcript;
                 const tm = txt.match(/(\d{1,2})\s*시/);
-                if(!tm) { alert("시간을 포함해 다시 말씀해주세요."); location.reload(); return; }
+                if(!tm) { alert("시간(예: 14시)을 말씀해주세요."); location.reload(); return; }
                 
                 app.time = parseInt(tm[1]);
                 app.place = txt.replace(tm[0], "").trim();
@@ -92,17 +99,17 @@
                     const kData = await kRes.json();
                     if(!kData.documents.length) throw "장소를 찾을 수 없습니다.";
                     
-                    app.destX = kData.documents[0].x;
-                    app.destY = kData.documents[0].y;
+                    app.dx = kData.documents[0].x;
+                    app.dy = kData.documents[0].y;
 
                     if(app.mode === 'station') {
-                        const sUrl = `https://corsproxy.io/?${encodeURIComponent(`https://dapi.kakao.com/v2/local/search/category.json?category_group_code=SW8&x=${app.destX}&y=${app.destY}&radius=1000&sort=distance`)}`;
+                        const sUrl = `https://corsproxy.io/?${encodeURIComponent(`https://dapi.kakao.com/v2/local/search/category.json?category_group_code=SW8&x=${app.dx}&y=${app.dy}&radius=1500&sort=distance`)}`;
                         const sRes = await fetch(sUrl, { headers: { 'Authorization': `KakaoAK ${KEY.K}` } });
                         const sData = await sRes.json();
                         renderStations(sData.documents);
                     } else {
                         app.walk = 0;
-                        fetchData(app.destX, app.destY);
+                        fetchData(app.dx, app.dy);
                     }
                 } catch(e) { alert(e); location.reload(); }
             };
@@ -114,11 +121,11 @@
             const cont = document.getElementById('station-list');
             const filtered = list.filter(s => (s.distance/67) <= 15);
             if(!filtered.length) {
-                cont.innerHTML = `<button class="btn-station" onclick="selectSt('${app.destX}','${app.destY}',0)">주변 역 없음 (목적지로 바로 안내)</button>`;
+                cont.innerHTML = `<button class="btn-station" onclick="selectSt('${app.dx}','${app.dy}',0)">주변 15분 내 지하철역 없음<br>목적지로 바로 안내하기</button>`;
             } else {
                 cont.innerHTML = filtered.map(s => `
                     <button class="btn-station" onclick="selectSt('${s.x}','${s.y}',${Math.ceil(s.distance/67)})">
-                        <b>${s.place_name}</b><br>내려서 도보 ${Math.ceil(s.distance/67)}분
+                        <b>${s.place_name}</b><br>내려서 도보 약 ${Math.ceil(s.distance/67)}분
                     </button>
                 `).join('');
             }
@@ -142,18 +149,20 @@
         function renderFinal(r, w, ex, ey) {
             setSc('sc-result');
             
+            // 경로 필터링: 첫 탑승지까지 도보 5분 이내
             const paths = r.result?.path?.filter(p => p.subPath[0].trafficType !== 3 || p.subPath[0].sectionTime <= 5) || [];
             const subways = paths.filter(p => p.pathType === 1).sort((a,b) => a.info.totalTime - b.info.totalTime);
             const buses = paths.filter(p => p.pathType !== 1).sort((a,b) => a.info.totalTime - b.info.totalTime);
 
-            // [로직] 지하철이 있으면 버스는 지하철보다 15분 이상 빠를 때만 선택
+            // [핵심 로직] 버스가 지하철보다 15분 이상 빠를 때만 버스 선택, 아니면 무조건 지하철
             let best = subways[0];
             if(buses[0] && (!subways[0] || (subways[0].info.totalTime - buses[0].info.totalTime >= 15))) {
                 best = buses[0];
             }
 
             if(!best) {
-                document.getElementById('safety-time').innerText = "조회 실패";
+                document.getElementById('safety-time').innerText = "--:--";
+                document.getElementById('summary').innerText = "적절한 경로를 찾을 수 없습니다.";
                 return;
             }
 
@@ -162,30 +171,30 @@
             const dep = new Date(); dep.setHours(app.time, -(best.info.totalTime + margin));
             
             document.getElementById('safety-time').innerText = `${String(dep.getHours()).padStart(2,'0')}:${String(dep.getMinutes()).padStart(2,'0')}`;
-            document.getElementById('summary').innerHTML = `<b>${HOME.name}</b> 출발<br>소요 ${best.info.totalTime}분 (여유 ${margin}분 포함)`;
+            document.getElementById('summary').innerHTML = `이동 ${best.info.totalTime}분 + 여유 ${margin}분 적용`;
 
-            // 구글 지도 링크 설정
+            // 지도 링크 업데이트
             document.getElementById('map-btn').href = `https://www.google.com/maps/dir/${HOME.y},${HOME.x}/${ey},${ex}/data=!4m2!4m1!3e3`;
 
             document.getElementById('route-steps').innerHTML = best.subPath.filter(s => s.trafficType !== 3).map((s, i) => `
                 <div><span class="badge ${s.trafficType===1?'b-subway':'b-bus'}">${s.trafficType===1?s.lane[0].name:s.lane[0].busNo}</span> 
-                <b>${i===0?HOME.name:s.startName}</b> 탑승 ➔ <b>${s.endName}</b> 하차</div>
-            `).join('<div style="color:#555; margin-left:15px;">▼ 환승</div>');
+                <b>${s.startName}</b> 탑승 ➔ <b>${s.endName}</b> 하차</div>
+            `).join('<div style="color:#444; margin: 4px 0 4px 18px; font-size:12px;">▼ 환승</div>') + (app.walk > 0 ? `<div style="margin-top:10px; color:#ff9f43; font-weight:bold;">🚶 하차 후 최종지까지 도보 ${app.walk}분</div>` : '');
 
-            // 날씨 차트 및 옷차림
+            // 날씨 및 옷차림
             const items = w.response?.body?.items?.item || [];
             const v = items.filter(i => i.fcstTime >= String(app.time).padStart(2,'0')+"00" && i.fcstTime <= "2200");
             if(v.length) {
                 const t = v.filter(i => i.category==='TMP').map(i => parseInt(i.fcstValue));
                 const mx = Math.max(...t);
                 const out = mx >= 23 ? "반팔" : mx >= 20 ? "얇은 긴팔" : mx >= 17 ? "맨투맨/니트" : mx >= 12 ? "자켓/가디건" : "코트";
-                document.getElementById('outfit-info').innerHTML = `최고 기온 <b>${mx}°</b> 기준, <b>${out}</b> 추천`;
+                document.getElementById('outfit-info').innerHTML = `활동 시간 최고 <b>${mx}°</b><br>추천: <b>${out}</b> (일교차 주의)`;
                 
                 const p = v.filter(i => i.category==='POP');
                 new Chart(document.getElementById('chart'), {
                     type: 'bar',
-                    data: { labels: p.map(i => i.fcstTime.slice(0,2)+'시'), datasets: [{ data: p.map(i => i.fcstValue), backgroundColor: p.map(i => i.fcstValue >= 40 ? '#ff4d4d' : '#3e91ff'), borderRadius: 5 }] },
-                    options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100 } } }
+                    data: { labels: p.map(i => i.fcstTime.slice(0,2)+'시'), datasets: [{ data: p.map(i => i.fcstValue), backgroundColor: p.map(i => i.fcstValue >= 40 ? '#ff4d4d' : '#3e91ff'), borderRadius: 6 }] },
+                    options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100, ticks: { color: '#888' } }, x: { ticks: { color: '#888' } } } }
                 });
             }
         }
