@@ -68,8 +68,8 @@
         const KMA_KEY = 'ddfd71d0b929827fd9c3c1851b50c301f9afb482a3143c0b39e135f9b3b8f070';
         const ODSAY_KEY = 'Rdv6LaA8z0P2BHkKrh/DsA';
 
-        const SANGIL_SUBWAY = { name: "상일동역 (지하철)", sx: 127.1735, sy: 37.5519 };
-        const SANGIL_BUS = { name: "상일동역 1번출구 (버스)", sx: 127.1741, sy: 37.5524 };
+        const SANGIL_SUBWAY = { name: "상일동역(5호선)", sx: 127.1735, sy: 37.5519 };
+        const SANGIL_BUS = { name: "상일동역1번출구(25133)", sx: 127.1741, sy: 37.5524 };
 
         let state = { destMode: null, placeName: null, targetTime: null, targetCoords: null, walkDist: 0, finalDestName: "" };
 
@@ -179,15 +179,21 @@
             } catch (err) { alert(err.message); location.reload(); }
         }
 
-        // [추가] 오디세이 상세 경로 텍스트 생성기
-        function buildRouteHtml(pathObj) {
+        // [핵심 변경] 첫 번째 탑승지 이름을 강제 고정하는 로직 추가
+        function buildRouteHtml(pathObj, forcedStartName) {
             if (!pathObj || !pathObj.subPath) return "상세 경로 정보를 불러올 수 없습니다.";
             let steps = [];
+            let isFirstStep = true;
+            
             pathObj.subPath.forEach(sub => {
                 if (sub.trafficType === 1) { // 지하철
-                    steps.push(`<div><span class="transit-badge subway-badge">${sub.lane[0].name}</span> ${sub.startName}역 탑승 ➔ <b>${sub.endName}역</b> 하차</div>`);
+                    let startName = isFirstStep ? forcedStartName : sub.startName + "역";
+                    steps.push(`<div><span class="transit-badge subway-badge">${sub.lane[0].name}</span> <b>${startName}</b> 탑승 ➔ <b>${sub.endName}역</b> 하차</div>`);
+                    isFirstStep = false;
                 } else if (sub.trafficType === 2) { // 버스
-                    steps.push(`<div><span class="transit-badge bus-badge">${sub.lane[0].busNo}</span> ${sub.startName} 탑승 ➔ <b>${sub.endName}</b> 하차</div>`);
+                    let startName = isFirstStep ? forcedStartName : sub.startName;
+                    steps.push(`<div><span class="transit-badge bus-badge">${sub.lane[0].busNo}</span> <b>${startName}</b> 탑승 ➔ <b>${sub.endName}</b> 하차</div>`);
+                    isFirstStep = false;
                 }
             });
             return steps.join(`<div class="transfer-icon"><i class="fas fa-arrow-down"></i> 환승</div>`);
@@ -204,7 +210,7 @@
                 document.getElementById('safety-time').innerText = "조회 불가";
                 document.getElementById('route-detail').innerHTML = "현재 노선이 없거나 서버 응답 지연 중입니다.";
             } else {
-                // [수정 완료] 버스가 15분 이상 빠를 때만 버스 채택 (아니면 무조건 지하철 베이스)
+                // 버스가 15분 이상 빠를 때만 버스 채택
                 const useBus = (tA - tB >= 15);
                 const final = useBus ? { name: SANGIL_BUS.name, time: tB, margin: 25, pathData: pathB } : { name: SANGIL_SUBWAY.name, time: tA, margin: 10, pathData: pathA };
                 
@@ -218,8 +224,8 @@
                 
                 let detailHtml = `<b>${final.name}</b> 출발 추천<br>(이동 ${final.time}분 + 여유시간 ${final.margin}분 반영됨)`;
                 
-                // [추가] 상세 경로(환승 정보) 박스 렌더링
-                const routeSteps = buildRouteHtml(final.pathData);
+                // 상세 경로 박스 렌더링 (첫 번째 출발지 이름 강제 주입)
+                const routeSteps = buildRouteHtml(final.pathData, final.name);
                 detailHtml += `<div class="route-step-box">${routeSteps}</div>`;
                 
                 if(state.walkDist > 0) {
