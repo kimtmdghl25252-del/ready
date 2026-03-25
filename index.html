@@ -3,121 +3,146 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 Debugger v27.0</title>
+    <title>S26 Premium - Core Engine</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        :root { --bg: #000; --blue: #0a84ff; --card: #1c1c1e; }
-        body { margin: 0; background: var(--bg); color: #fff; font-family: 'Cascadia Code', monospace; }
-        .container { padding: 20px; max-width: 500px; margin: 0 auto; }
-        #console { 
-            background: #0a0a0a; border: 1px solid #333; padding: 15px; 
-            height: 180px; overflow-y: auto; font-size: 11px; color: #0f0; 
-            margin-top: 15px; border-radius: 10px; line-height: 1.4;
-        }
-        .input-card { background: var(--card); border-radius: 20px; padding: 20px; border: 1px solid #333; }
-        input { width: 100%; background: #000; border: 1px solid #444; border-radius: 10px; padding: 12px; color: #fff; margin-bottom: 10px; box-sizing: border-box; }
-        button { width: 100%; padding: 15px; border-radius: 15px; border: none; background: var(--blue); color: #fff; font-weight: bold; }
-        .result-box { background: #111; border: 1px solid var(--blue); border-radius: 20px; padding: 25px; margin-top: 20px; text-align: center; display: none; }
+        :root { --bg: #000; --card: #151515; --blue: #0a84ff; --green: #30d158; --red: #ff453a; --text: #fff; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; overflow-x: hidden; }
+        .container { padding: 25px; max-width: 500px; margin: 0 auto; }
+        
+        .header { font-size: 24px; font-weight: 900; color: var(--blue); margin-bottom: 25px; display: flex; align-items: center; justify-content: space-between; }
+        .badge { font-size: 10px; background: #333; padding: 4px 8px; border-radius: 6px; color: #aaa; letter-spacing: 1px; }
+
+        .input-box { background: var(--card); border: 1px solid #333; border-radius: 20px; padding: 25px; margin-bottom: 20px; }
+        label { display: block; font-size: 12px; color: #888; margin-bottom: 10px; font-weight: bold; }
+        input { width: 100%; background: #000; border: 1px solid #444; border-radius: 12px; padding: 15px; color: #fff; font-size: 16px; box-sizing: border-box; margin-bottom: 15px; outline: none; }
+        
+        button { width: 100%; padding: 16px; border-radius: 12px; border: none; background: var(--blue); color: #fff; font-weight: 900; font-size: 16px; cursor: pointer; transition: 0.2s; }
+        button:active { transform: scale(0.98); }
+
+        .result-card { background: linear-gradient(145deg, #1a1a1c, #000); border: 1px solid var(--blue); border-radius: 24px; padding: 35px 20px; text-align: center; display: none; margin-top: 20px; box-shadow: 0 10px 30px rgba(10, 132, 255, 0.15); }
+        .door-time { font-size: 80px; font-weight: 900; color: var(--blue); letter-spacing: -3px; line-height: 1; margin: 15px 0; }
+        .train-info { font-size: 16px; color: var(--green); font-weight: bold; margin-bottom: 15px; }
+        .meta-info { font-size: 13px; color: #777; border-top: 1px solid #222; padding-top: 15px; line-height: 1.6; }
+
+        .log { font-size: 12px; color: #555; text-align: center; margin-top: 15px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div style="font-size: 18px; font-weight: 900; color: var(--blue); margin-bottom: 20px;">SYSTEM CALIBRATION v27.0</div>
+    <div class="header">
+        <span>S26 <span style="color:#fff;">Premium</span></span>
+        <span class="badge">XML CORE</span>
+    </div>
 
-    <div class="input-card">
-        <label style="font-size:11px; color:#888;">DESTINATION</label>
-        <input type="text" id="dest" value="서울역">
-        <div style="display:flex; gap:10px;">
-            <input type="date" id="date">
-            <input type="time" id="time">
+    <div class="input-box">
+        <label>목적지 (지하철역)</label>
+        <input type="text" id="dest" placeholder="예: 서울, 강남, 잠실" value="서울">
+        
+        <div style="display: flex; gap: 10px;">
+            <div style="flex: 1;">
+                <label>날짜</label>
+                <input type="date" id="date">
+            </div>
+            <div style="flex: 1;">
+                <label>희망 도착 시각</label>
+                <input type="time" id="time">
+            </div>
         </div>
-        <button onclick="safeRequest()">REQUEST DATA</button>
+        
+        <button onclick="calculate()"><i class="fas fa-calculator"></i> 출발 시각 역산</button>
     </div>
 
-    <div id="result" class="result-box">
-        <div id="door-time" style="font-size: 64px; font-weight: 900; color: var(--blue);">--:--</div>
-        <div id="train-info" style="color: #30d158; font-weight: bold; font-size: 14px; margin-top: 10px;"></div>
+    <div id="result" class="result-card">
+        <div style="font-size: 14px; color: #aaa; font-weight: bold;">현관문을 나서야 할 시각</div>
+        <div id="res-door" class="door-time">--:--</div>
+        <div id="res-train" class="train-info"></div>
+        <div id="res-meta" class="meta-info"></div>
     </div>
 
-    <div id="console"></div>
+    <div id="log" class="log">대기 중...</div>
 </div>
 
 <script>
     const KEY = '597057594f6b696d3438526a7a564e';
     const START = "상일동";
+    const MARGIN = 10;
 
+    // 현재 시간 세팅
     window.onload = () => {
         const now = new Date();
         document.getElementById('date').value = now.toISOString().slice(0, 10);
         document.getElementById('time').value = now.toTimeString().slice(0, 5);
-        log("Ready to fetch. Port 8088 removed for stability.");
     };
 
-    function log(msg, color = "#0f0") {
-        const con = document.getElementById('console');
-        con.innerHTML += `<div style="color:${color}">> ${msg}</div>`;
-        con.scrollTop = con.scrollHeight;
+    function setLog(msg, color = "#888") {
+        document.getElementById('log').innerHTML = `<span style="color:${color}">${msg}</span>`;
     }
 
-    async function safeRequest() {
+    async function calculate() {
         const dest = document.getElementById('dest').value.trim().replace(/역$/, "");
         const date = document.getElementById('date').value.replace(/-/g, "");
         const time = document.getElementById('time').value.replace(/:/g, "");
         
-        // 1. [구문 보정] 포트번호를 빼고 표준 swopenAPI 도메인 사용
-        // 2. [파라미터 보정] 뒤쪽 빈 항목들(///Y)까지 명시적으로 채움
-        const apiUrl = `http://swopenAPI.seoul.go.kr/api/subway/${KEY}/json/subwayShortestRoute/1/1/${START}/${dest}/${date}${time}/1///Y`;
+        if(!dest) return alert("목적지를 입력하세요.");
         
-        log(`Requesting: ${dest}`);
+        setLog("<i class='fas fa-spinner fa-spin'></i> 서울시 원본 데이터(XML) 요청 중...", "#0a84ff");
+
+        // 1. 완벽하게 작동했던 포트 8088 + XML 엔드포인트 조합
+        const targetUrl = `http://openapi.seoul.go.kr:8088/${KEY}/xml/subwayShortestRoute/1/1/${START}/${dest}/${date}${time}/1`;
         
-        // corsproxy.io의 522 에러 회피를 위해 프록시 주소 형식 변경
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`;
+        // 2. allorigins의 'raw' 옵션을 사용하여 데이터 변형 없이 순수 XML만 가져옴
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
 
         try {
-            const res = await fetch(proxyUrl);
-            const wrapper = await res.json();
-            const rawData = wrapper.contents;
+            const response = await fetch(proxyUrl);
+            const xmlText = await response.text();
 
-            // HTML이 오는지 확인
-            if (rawData.includes("<!DOCTYPE") || rawData.includes("<html")) {
-                log("Error: Target server returned HTML. Check API Key or Path.", "red");
-                return;
+            if (xmlText.includes("<!DOCTYPE") || xmlText.includes("<html")) {
+                throw new Error("서울시 서버가 점검 중이거나 응답을 거부했습니다.");
             }
 
-            const data = JSON.parse(rawData);
+            // XML 파싱 (수학적 팩트 체크)
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+
+            // 결과 코드 확인
+            const resultCode = xmlDoc.getElementsByTagName("resultCode")[0]?.textContent;
+            if (resultCode !== "00") {
+                const errorMsg = xmlDoc.getElementsByTagName("resultMsg")[0]?.textContent || "경로를 찾을 수 없습니다.";
+                throw new Error(errorMsg);
+            }
+
+            // 데이터 추출
+            const trainTime = xmlDoc.getElementsByTagName("trainDptreTm")[0]?.textContent; // 예: "14:04:00"
+            const travelTime = xmlDoc.getElementsByTagName("totalreqHr")[0]?.textContent; // 분이 아닌 초 단위일 수 있음
+            const transferCount = xmlDoc.getElementsByTagName("trsitNmtm")[0]?.textContent;
+
+            if (!trainTime) throw new Error("배차 시간표 데이터가 누락되었습니다.");
+
+            // 역산 로직 적용
+            let [h, m, s] = trainTime.split(':').map(Number);
+            let totalMins = (h * 60 + m) - MARGIN;
             
-            // 서울시 API는 대소문자를 섞어서 쓰기도 하니 확인 절차 필요
-            const root = data.subwayShortestRoute || data.shortestRoute;
+            let doorH = Math.floor(totalMins / 60);
+            let doorM = totalMins % 60;
 
-            if (root && (root.resultCode === "00" || root.status === 200)) {
-                log("Data Synced Successfully.", "#30d158");
-                process(root);
-            } else {
-                log(`API Logic Error: ${root ? root.resultMsg : 'Unknown'}`, "red");
-            }
+            // 결과 화면 렌더링
+            document.getElementById('result').style.display = 'block';
+            document.getElementById('res-door').innerText = `${String(doorH).padStart(2,'0')}:${String(doorM).padStart(2,'0')}`;
+            document.getElementById('res-train').innerText = `상일동역 ${trainTime} 실제 열차 기준`;
+            document.getElementById('res-meta').innerHTML = `
+                <b style="color:#fff;">${START} ➔ ${dest}</b><br>
+                예상 소요 시간: 약 ${Math.ceil(Number(travelTime)/60)}분<br>
+                환승: ${transferCount}회
+            `;
+            
+            setLog("계산 완료", "#30d158");
 
-        } catch (e) {
-            log(`Network Exception: ${e.message}`, "red");
+        } catch (error) {
+            setLog(`오류: ${error.message}`, "#ff453a");
         }
-    }
-
-    function process(data) {
-        // XML 데이터 구조를 JSON으로 매칭
-        const paths = data.paths || data.shortestRouteList;
-        const firstTrain = paths[0].trainDptreTm || paths[0].shtStatnNmList; // 필드명 재확인 필요
-        
-        if (!firstTrain) {
-            log("Timetable data missing in response.", "orange");
-            return;
-        }
-
-        let [h, m, s] = firstTrain.split(':').map(Number);
-        let total = (h * 60 + m) - 10;
-
-        document.getElementById('result').style.display = 'block';
-        document.getElementById('door-time').innerText = `${String(Math.floor(total/60)).padStart(2,'0')}:${String(total%60).padStart(2,'0')}`;
-        document.getElementById('train-info').innerText = `Actual Train: ${firstTrain}`;
     }
 </script>
 </body>
