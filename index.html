@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 프리미엄 비서 v8.0</title>
+    <title>S26 프리미엄 비서 v8.1</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -30,7 +30,7 @@
 
     <div id="sc-load" class="screen" style="justify-content: center; align-items: center;">
         <i class="fas fa-spinner fa-spin" style="font-size: 50px; color: var(--blue); margin-bottom: 20px;"></i>
-        <div id="load-msg" style="text-align:center;">실제 배차 정보를 조회하여<br>출발 시각을 역산하고 있습니다...</div>
+        <div id="load-msg" style="text-align:center;">경로 데이터를 정밀 분석 중입니다...</div>
     </div>
 
     <div id="sc-select" class="screen">
@@ -67,7 +67,7 @@
             rec.onresult = async (e) => {
                 const txt = e.results[0][0].transcript;
                 const tm = txt.match(/(\d{1,2})\s*시/);
-                if(!tm) { alert("도착 시간을 말씀해주세요."); location.reload(); return; }
+                if(!tm) { alert("도착 시간을 포함해 말씀해주세요."); location.reload(); return; }
                 app.targetH = parseInt(tm[1]);
                 app.place = txt.replace(tm[0], "").trim();
                 fetchCoords();
@@ -87,7 +87,7 @@
                     const sData = await sRes.json();
                     renderStations(sData.documents, dx, dy);
                 } else { fetchData(dx, dy); }
-            } catch(e) { alert("검색 오류"); location.reload(); }
+            } catch(e) { alert("검색 실패"); location.reload(); }
         }
 
         function renderStations(list, dx, dy) {
@@ -101,9 +101,9 @@
 
         async function fetchData(ex, ey) {
             const dateStr = new Date().getFullYear() + String(new Date().getMonth() + 1).padStart(2, '0') + String(new Date().getDate()).padStart(2, '0');
-            // SearchType=1 (도착 기준 검색)을 다시 사용하여 실제 배차 데이터를 강제 호출
-            const arrivalTime = String(app.targetH).padStart(2, '0') + "00";
-            const oUrl = `https://api.odsay.com/v1/api/searchPubTransPathT?SX=${POS.SUB.x}&SY=${POS.SUB.y}&EX=${ex}&EY=${ey}&SearchType=1&ArrivalTime=${arrivalTime}&apiKey=${encodeURIComponent(KEY.O)}`;
+            
+            // [전략 변경] SearchType=0(기본)으로 조회하여 안정성을 확보하고 코드로 필터링합니다.
+            const oUrl = `https://api.odsay.com/v1/api/searchPubTransPathT?SX=${POS.SUB.x}&SY=${POS.SUB.y}&EX=${ex}&EY=${ey}&apiKey=${encodeURIComponent(KEY.O)}`;
             const wUrl = `https://corsproxy.io/?${encodeURIComponent(`https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${KEY.M}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${dateStr}&base_time=0200&nx=62&ny=126`)}`;
             
             try {
@@ -117,17 +117,20 @@
             const container = document.getElementById('result-container');
             container.innerHTML = "";
             
-            // 데이터가 없으면 SearchType=0으로 한 번 더 시도하는 fallback 로직
             if (!r.result || !r.result.path) {
-                container.innerHTML = "<div class='card' style='text-align:center;'>지정한 도착 시간에 맞는<br>배차 정보가 없습니다.</div>";
+                container.innerHTML = "<div class='card'>경로를 찾을 수 없습니다.</div>";
                 return;
             }
 
-            // 도보 1분 컷 필터
+            // 1. 도보 1분 컷 필터
             const paths = r.result.path.filter(p => p.subPath[0].trafficType !== 3 || p.subPath[0].sectionTime <= 1);
             
-            const subwayBest = paths.filter(p => p.pathType === 1).sort((a,b) => a.info.totalTime - b.info.totalTime)[0];
-            const busBest = paths.filter(p => p.pathType !== 1).sort((a,b) => a.info.totalTime - b.info.totalTime)[0];
+            // 2. 지하철 / 버스 경로 분리 및 최단 시간 추출
+            const subwayPaths = paths.filter(p => p.pathType === 1);
+            const busPaths = paths.filter(p => p.pathType !== 1);
+
+            const subwayBest = subwayPaths.sort((a,b) => a.info.totalTime - b.info.totalTime)[0];
+            const busBest = busPaths.sort((a,b) => a.info.totalTime - b.info.totalTime)[0];
 
             let displayList = [];
             if (subwayBest && busBest) {
@@ -142,34 +145,24 @@
                 const isBus = p.pathType !== 1;
                 const margin = isBus ? 15 : 10;
                 
-                // [수학적 배차 역산]
-                // 1. API에서 '첫 번째 수단의 실제 출발 시각'을 직접 추출 (HH:mm 형식)
-                const firstCarTime = p.info.firstStartStationPointTime; 
+                // [정밀 역산 수학 로직]
+                // 목표 시각(app.targetH:00)에서 소요 시간(p.info.totalTime)을 뺌 = 이론적 출발 시각
+                const goalTime = new Date();
+                goalTime.setHours(app.targetH, -p.info.totalTime);
                 
-                let finalDepartureH, finalDepartureM;
+                // 오디세이 기본 조회는 '현재' 기준이므로 배차 시간표가 명시되지 않을 수 있음
+                // 이 경우 이론적 출발 시각에서 사용자 마진을 뺍니다.
+                const finalDeparture = new Date(goalTime.getTime() - (margin * 60000));
 
-                if (firstCarTime && firstCarTime.includes(':')) {
-                    const [carH, carM] = firstCarTime.split(':').map(Number);
-                    // 실제 차 시간에서 사용자 마진(10/15분)을 뺌
-                    let totalMins = carH * 60 + carM - margin;
-                    finalDepartureH = Math.floor(totalMins / 60);
-                    finalDepartureM = totalMins % 60;
-                } else {
-                    // 배차 정보가 누락된 경우 소요시간 기반 역산
-                    const goalDep = new Date();
-                    goalDep.setHours(app.targetH, -(p.info.totalTime + margin));
-                    finalDepartureH = goalDep.getHours();
-                    finalDepartureM = goalDep.getMinutes();
-                }
-
+                const startPoint = isBus ? POS.BUS : POS.SUB;
                 const card = document.createElement('div');
                 card.className = 'card';
                 if(idx === 0 && displayList.length > 1) card.style.borderTop = "6px solid var(--blue)";
                 
                 card.innerHTML = `
-                    <div class="real-car-info"><i class="fas fa-clock"></i> 실제 ${firstCarTime || '--:--'} 차 탑승 기준</div>
+                    <div class="real-car-info"><i class="fas fa-calculator"></i> ${app.targetH}시 정각 도착 기준 역산</div>
                     <div style="font-size:14px; font-weight:bold; color:var(--green);">${isBus ? '🚌 버스/복합 경로' : '🚇 지하철 전용'}</div>
-                    <div class="time-val">${String(finalDepartureH).padStart(2,'0')}:${String(finalDepartureM).padStart(2,'0')}</div>
+                    <div class="time-val">${String(finalDeparture.getHours()).padStart(2,'0')}:${String(finalDeparture.getMinutes()).padStart(2,'0')}</div>
                     <div style="font-size:14px; color:var(--sub); margin-top:-5px;">현관문을 나서야 할 시각 (여유 ${margin}분)</div>
                     <div class="route-box">${p.subPath.filter(s => s.trafficType !== 3).map((s, i) => `<div><span class="badge ${s.trafficType===1?'b-subway':'b-bus'}">${s.trafficType===1?s.lane[0].name:s.lane[0].busNo}</span> <b>${s.startName}</b> 탑승 ➔ <b>${s.endName}</b></div>`).join('<div style="font-size:10px; margin-left:15px; color:#555;">▼ 환승</div>')}</div>`;
                 container.appendChild(card);
@@ -184,7 +177,7 @@
             if(v.length) {
                 const t = v.filter(i => i.category==='TMP').map(i => parseInt(i.fcstValue));
                 const mx = Math.max(...t);
-                const out = mx >= 23 ? "반팔" : mx >= 20 ? "셔츠/가디건" : mx >= 17 ? "맨투맨/니트" : mx >= 12 ? "자켓" : "코트";
+                const out = mx >= 23 ? "반팔" : mx >= 20 ? "얇은 셔츠" : mx >= 17 ? "니트/맨투맨" : mx >= 12 ? "자켓" : "코트";
                 document.getElementById('outfit-info').innerHTML = `최고 <b>${mx}°</b> 기준 추천: <b>${out}</b>`;
                 const p = v.filter(i => i.category==='POP');
                 new Chart(document.getElementById('chart'), { type: 'bar', data: { labels: p.map(i => i.fcstTime.slice(0,2)+'시'), datasets: [{ data: p.map(i => i.fcstValue), backgroundColor: p.map(i => i.fcstValue >= 40 ? '#ff4d4d' : '#3e91ff') }] }, options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100 } } } });
