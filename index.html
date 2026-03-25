@@ -3,143 +3,109 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 Premium v29.0</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <title>S26 Debugger v30.0</title>
     <style>
-        :root { --bg: #000; --card: #151515; --blue: #0a84ff; --green: #30d158; --red: #ff453a; --text: #fff; }
-        body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; }
-        .container { padding: 25px; max-width: 500px; margin: 0 auto; }
-        
-        .header { font-size: 24px; font-weight: 900; color: var(--blue); margin-bottom: 25px; display: flex; align-items: center; justify-content: space-between; }
-        .badge { font-size: 10px; background: #333; padding: 4px 8px; border-radius: 6px; color: #aaa; }
-
-        .board { background: var(--card); border: 1px solid #333; border-radius: 20px; padding: 25px; }
-        .board-title { font-size: 13px; color: #888; font-weight: bold; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-        
-        .train-list { display: flex; flex-direction: column; gap: 15px; }
-        .train-item { display: flex; justify-content: space-between; align-items: center; padding-bottom: 15px; border-bottom: 1px solid #222; }
-        .train-item:last-child { border-bottom: none; padding-bottom: 0; }
-        
-        .t-dest { font-size: 18px; font-weight: 800; color: #fff; margin-bottom: 5px; }
-        .t-status { font-size: 14px; color: var(--green); font-weight: bold; }
-        
-        .door-info { text-align: right; }
-        .door-time { font-size: 24px; font-weight: 900; color: var(--blue); }
-        .door-label { font-size: 11px; color: #777; font-weight: bold; }
-
-        button { width: 100%; padding: 16px; border-radius: 12px; border: none; background: #222; color: var(--blue); font-weight: bold; font-size: 15px; cursor: pointer; margin-top: 20px; border: 1px solid #333; }
-        
-        #log { font-size: 12px; color: #555; text-align: center; margin-top: 15px; }
+        body { margin: 0; background: #000; color: #fff; font-family: 'Cascadia Code', monospace; padding: 20px; font-size: 14px; }
+        .box { background: #111; border: 1px solid #333; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        label { display: block; margin-bottom: 10px; color: #0a84ff; font-weight: bold; font-size: 12px; }
+        input { background: #000; border: 1px solid #555; padding: 12px; color: #fff; width: 100%; box-sizing: border-box; margin-bottom: 15px; border-radius: 5px; outline: none; }
+        button { background: #0a84ff; color: #fff; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 5px; }
+        button:active { background: #005bb5; }
+        #log { background: #050505; border: 1px solid #222; padding: 15px; height: 350px; overflow-y: auto; color: #0f0; line-height: 1.6; font-size: 12px; }
+        .error { color: #ff453a; }
+        .success { color: #30d158; }
+        .warning { color: #ff9f0a; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div class="header">
-        <span>S26 <span style="color:#fff;">Premium</span></span>
-        <span class="badge">LIVE TRACKING</span>
+    <h2 style="color: #0a84ff; margin-top: 0;">S26 통신 디버거 v30.0</h2>
+    
+    <div class="box">
+        <label>조회할 역 이름 (한글 깨짐 테스트용)</label>
+        <input type="text" id="station" value="상일동">
+        <button onclick="runDebug()">실시간 데이터 정밀 분석 시작</button>
     </div>
 
-    <div class="board">
-        <div class="board-title">
-            <span>상일동역 5호선 실시간 현황</span>
-            <span id="update-time" style="color:var(--blue);">00:00</span>
-        </div>
-        
-        <div id="train-container" class="train-list">
-            <div style="text-align: center; color: #555; padding: 30px;">
-                <i class="fas fa-spinner fa-spin"></i> 열차 위치 추적 중...
-            </div>
-        </div>
-    </div>
-
-    <button onclick="fetchLiveData()"><i class="fas fa-sync-alt"></i> 수동 새로고침</button>
-    <div id="log">대기 중...</div>
-</div>
+    <div id="log">시스템 대기 중... 디버깅 모드 ON.</div>
 
 <script>
     const KEY = '597057594f6b696d3438526a7a564e';
-    const START = "상일동";
-    const MARGIN = 10; // 현관문 마진 (분)
 
-    async function fetchLiveData() {
-        const log = document.getElementById('log');
-        log.innerHTML = "<span style='color:var(--blue);'>데이터 요청 중...</span>";
+    function printLog(msg, type = "normal") {
+        const logBox = document.getElementById('log');
+        let color = "#0f0";
+        if (type === "error") color = "#ff453a";
+        if (type === "success") color = "#30d158";
+        if (type === "warning") color = "#ff9f0a";
+        
+        const timeStr = new Date().toLocaleTimeString();
+        logBox.innerHTML += `<div style="color:${color}; margin-bottom:4px;">[${timeStr}] ${msg}</div>`;
+        logBox.scrollTop = logBox.scrollHeight;
+    }
 
-        // 포트 8088이 아닌 표준 swopenAPI 사용 (차단 확률 매우 낮음)
-        const targetUrl = `http://swopenAPI.seoul.go.kr/api/subway/${KEY}/json/realtimeStationArrival/0/5/${START}`;
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+    async function runDebug() {
+        const station = document.getElementById('station').value.trim().replace(/역$/, "");
+        document.getElementById('log').innerHTML = ""; // 로그 초기화
+        
+        printLog(`[실시간 API 분석 시작] 타겟 역: ${station}`);
+
+        // [수학적 보정] 프록시를 거칠 때 한글이 깨지는 것을 방지하기 위해 이중 인코딩 적용
+        const encodedStation = encodeURIComponent(station);
+        const targetUrl = `http://swopenAPI.seoul.go.kr/api/subway/${KEY}/json/realtimeStationArrival/0/5/${encodedStation}`;
+        printLog(`생성된 타겟 URL: ${targetUrl}`);
+
+        // 이번엔 CORS 이슈가 가장 적은 AllOrigins Raw를 메인으로 사용
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+        printLog(`프록시 호출: AllOrigins (Raw Mode)`, "warning");
 
         try {
             const res = await fetch(proxyUrl);
-            const data = await res.json();
+            printLog(`HTTP 상태 코드: ${res.status}`);
 
-            if (!data.realtimeArrivalList) {
-                throw new Error("운행 중인 열차가 없거나 데이터를 불러올 수 없습니다.");
+            const text = await res.text();
+            printLog(`수신된 데이터 크기: ${text.length} bytes`);
+
+            // 방화벽 차단(HTML 반환) 여부 검사
+            if (text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
+                printLog("❌ 프록시 또는 서버가 에러 페이지(HTML)를 반환했습니다.", "error");
+                printLog(`내용: ${text.substring(0, 100).replace(/</g, "&lt;")}`, "error");
+                return;
             }
 
-            render(data.realtimeArrivalList);
-            
-            const now = new Date();
-            document.getElementById('update-time').innerText = 
-                `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')} 갱신`;
-            log.innerHTML = "<span style='color:var(--green);'>동기화 완료</span>";
+            printLog("✅ JSON 파싱 시도 중...");
+            const data = JSON.parse(text);
+
+            // 1. 서울시 서버 내부 에러메시지 확인
+            if (data.errorMessage && data.errorMessage.code !== "INFO-000") {
+                 printLog(`❌ 서울시 API 거부 (코드: ${data.errorMessage.code})`, "error");
+                 printLog(`메시지: ${data.errorMessage.message}`, "error");
+                 return;
+            }
+            if (data.RESULT && data.RESULT.CODE !== "INFO-000") {
+                 printLog(`❌ 서울시 API 거부 (코드: ${data.RESULT.CODE})`, "error");
+                 printLog(`메시지: ${data.RESULT.MESSAGE}`, "error");
+                 return;
+            }
+
+            // 2. 실제 데이터 존재 여부 확인
+            if (data.realtimeArrivalList && data.realtimeArrivalList.length > 0) {
+                printLog(`✅ 정상! 실시간 열차 데이터 ${data.realtimeArrivalList.length}개 발견.`, "success");
+                data.realtimeArrivalList.forEach((train, idx) => {
+                    printLog(`[${idx+1}] ${train.trainLineNm} / ${train.arvlMsg2}`, "success");
+                });
+            } else {
+                printLog("❌ 응답은 받았으나 'realtimeArrivalList'가 비어있습니다.", "error");
+                printLog(`서버가 반환한 최상위 변수들: ${Object.keys(data).join(", ")}`, "warning");
+                // 원본 데이터 일부 출력
+                printLog(`원본 텍스트 일부: ${text.substring(0, 150)}...`, "warning");
+            }
 
         } catch (e) {
-            log.innerHTML = `<span style='color:var(--red);'>오류: ${e.message}</span>`;
+            printLog(`❌ 치명적 자바스크립트 오류: ${e.message}`, "error");
         }
     }
-
-    function render(list) {
-        const container = document.getElementById('train-container');
-        const now = new Date();
-        
-        // 데이터 파싱 및 UI 생성
-        const html = list.map(train => {
-            // barvlDt: 도착까지 남은 시간 (초)
-            const remainSecs = parseInt(train.barvlDt) || 0;
-            const remainMins = Math.floor(remainSecs / 60);
-            
-            // 현관문 나설 시간 계산
-            let doorText = "--:--";
-            let doorLabel = "출발 권장 안함";
-            let doorColor = "#777";
-
-            if (remainMins > MARGIN) {
-                // 아직 마진보다 시간이 많이 남았을 때
-                const targetTime = new Date(now.getTime() + (remainMins - MARGIN) * 60000);
-                doorText = `${String(targetTime.getHours()).padStart(2,'0')}:${String(targetTime.getMinutes()).padStart(2,'0')}`;
-                doorLabel = `${MARGIN}분 마진 출발`;
-                doorColor = "var(--blue)";
-            } else {
-                // 이미 늦었거나 너무 임박했을 때
-                doorText = "탑승 불가";
-                doorLabel = "다음 열차 이용";
-                doorColor = "var(--red)";
-            }
-
-            // 하행/상행 정보 깔끔하게 정리 (예: "방화행 - 여의도방면")
-            const destName = train.trainLineNm.split('-')[0].trim();
-
-            return `
-                <div class="train-item">
-                    <div>
-                        <div class="t-dest">${destName}</div>
-                        <div class="t-status">${train.arvlMsg2}</div>
-                    </div>
-                    <div class="door-info">
-                        <div class="door-time" style="color: ${doorColor};">${doorText}</div>
-                        <div class="door-label">${doorLabel}</div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        container.innerHTML = html;
-    }
-
-    // 초기 실행
-    fetchLiveData();
 </script>
+
 </body>
 </html>
