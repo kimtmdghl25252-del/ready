@@ -80,7 +80,7 @@
                 document.getElementById('loading-text').innerText = `"${state.placeName}" 찾는 중...`;
 
                 try {
-                    // 1. 카카오 장소 검색 (보안 우회를 위해 직접 fetch 호출)
+                    // 1. 카카오 장소 검색 (REST API 직접 호출)
                     const kakaoRes = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(state.placeName)}`, {
                         headers: { 'Authorization': `KakaoAK ${KAKAO_KEY}` }
                     });
@@ -103,7 +103,6 @@
                     const rA = await routeARes.json();
                     const rB = await routeBRes.json();
 
-                    // 3. UI 업데이트 실행
                     updateFinalUI(weatherData, rA, rB);
 
                 } catch (err) {
@@ -113,7 +112,7 @@
             };
 
             recognition.onerror = () => {
-                alert("음성 인식에 실패했습니다. 마이크 권한을 확인해주세요.");
+                alert("음성 인식 실패. 마이크 권한을 확인해주세요.");
                 location.reload();
             };
 
@@ -121,11 +120,9 @@
         }
 
         function updateFinalUI(weather, rA, rB) {
-            // 교통 소요시간 계산
             const tA = rA.result ? rA.result.path[0].info.totalTime : 999;
             const tB = rB.result ? rB.result.path[0].info.totalTime : 999;
             
-            // 버스가 15분 이상 빠를 때만 버스 루트 채택
             const useBus = (tA - tB >= 15);
             const final = useBus ? { name: "버스(상일동역1번출구)", time: tB, margin: 25 } : { name: "지하철(상일동역)", time: tA, margin: 10 };
             
@@ -135,7 +132,6 @@
             document.getElementById('safety-time').innerText = depTime.toTimeString().slice(0,5);
             document.getElementById('route-detail').innerText = `${final.name} 탑승 (소요 ${final.time}분, 여유 ${final.margin}분 포함)`;
 
-            // 날씨 및 옷차림 처리
             const items = weather.response.body.items.item;
             const tmpItems = items.filter(i => i.category === 'TMP');
             const maxTemp = Math.max(...tmpItems.map(i => parseInt(i.fcstValue)));
@@ -143,7 +139,6 @@
             let outfitMsg = maxTemp >= 23 ? "반팔, 얇은 셔츠" : maxTemp >= 20 ? "긴팔, 면바지" : maxTemp >= 17 ? "맨투맨, 가디건" : "자켓, 트렌치코트";
             document.getElementById('outfit-list').innerHTML = `<div class="outfit-row"><i class="fas fa-tshirt"></i> 추천: ${outfitMsg} (최고 ${maxTemp}°)</div>`;
 
-            // 강수 확률 그래프
             const popItems = items.filter(i => i.category === 'POP').slice(0, 10);
             new Chart(document.getElementById('rainChart'), {
                 type: 'line',
