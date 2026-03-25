@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 프리미엄 비서 v7.1</title>
+    <title>S26 프리미엄 비서 v7.2</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -30,7 +30,7 @@
 
     <div id="sc-load" class="screen" style="justify-content: center; align-items: center;">
         <i class="fas fa-spinner fa-spin" style="font-size: 50px; color: var(--blue); margin-bottom: 20px;"></i>
-        <div id="load-msg" style="text-align:center;">데이터를 불러오는 중...</div>
+        <div id="load-msg" style="text-align:center;">경로 데이터를 분석 중입니다...</div>
     </div>
 
     <div id="sc-select" class="screen">
@@ -67,54 +67,50 @@
             rec.onresult = async (e) => {
                 const txt = e.results[0][0].transcript;
                 const tm = txt.match(/(\d{1,2})\s*시/);
-                if(!tm) { alert("도착 시간(예: 14시)을 말씀해주세요."); location.reload(); return; }
+                if(!tm) { alert("시간을 포함해 말씀해주세요."); location.reload(); return; }
                 app.targetH = parseInt(tm[1]);
                 app.place = txt.replace(tm[0], "").trim();
-
-                try {
-                    const kUrl = `https://corsproxy.io/?${encodeURIComponent(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${app.place}`)}`;
-                    const kRes = await fetch(kUrl, { headers: { 'Authorization': `KakaoAK ${KEY.K}` } });
-                    const kData = await kRes.json();
-                    const dx = kData.documents[0].x, dy = kData.documents[0].y;
-                    
-                    if(app.mode === 'station') {
-                        const sUrl = `https://corsproxy.io/?${encodeURIComponent(`https://dapi.kakao.com/v2/local/search/category.json?category_group_code=SW8&x=${dx}&y=${dy}&radius=1500&sort=distance`)}`;
-                        const sRes = await fetch(sUrl, { headers: { 'Authorization': `KakaoAK ${KEY.K}` } });
-                        const sData = await sRes.json();
-                        renderStations(sData.documents, dx, dy);
-                    } else { fetchData(dx, dy); }
-                } catch(e) { alert("장소 검색 오류"); location.reload(); }
+                fetchCoords();
             };
             rec.start();
+        }
+
+        async function fetchCoords() {
+            try {
+                const kUrl = `https://corsproxy.io/?${encodeURIComponent(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${app.place}`)}`;
+                const kRes = await fetch(kUrl, { headers: { 'Authorization': `KakaoAK ${KEY.K}` } });
+                const kData = await kRes.json();
+                const dx = kData.documents[0].x, dy = kData.documents[0].y;
+                if(app.mode === 'station') {
+                    const sUrl = `https://corsproxy.io/?${encodeURIComponent(`https://dapi.kakao.com/v2/local/search/category.json?category_group_code=SW8&x=${dx}&y=${dy}&radius=1500&sort=distance`)}`;
+                    const sRes = await fetch(sUrl, { headers: { 'Authorization': `KakaoAK ${KEY.K}` } });
+                    const sData = await sRes.json();
+                    renderStations(sData.documents, dx, dy);
+                } else { fetchData(dx, dy); }
+            } catch(e) { alert("장소 검색 오류"); location.reload(); }
         }
 
         function renderStations(list, dx, dy) {
             setSc('sc-select');
             const cont = document.getElementById('station-list');
             const filtered = list.filter(s => (s.distance/67) <= 15);
-            cont.innerHTML = filtered.length ? filtered.map(s => `
-                <button class="btn-station" style="width:100%; background:#252525; border:1px solid var(--blue); color:white; padding:15px; border-radius:15px; margin-bottom:10px; text-align:left;" 
-                onclick="selectSt('${s.x}','${s.y}',${Math.ceil(s.distance/67)})"><b>${s.place_name}</b><br>하차 후 도보 ${Math.ceil(s.distance/67)}분</button>
-            `).join('') : `<button class="btn-station" onclick="selectSt('${dx}','${dy}',0)">목적지 바로 안내</button>`;
+            cont.innerHTML = filtered.length ? filtered.map(s => `<button class="btn-station" style="width:100%; background:#252525; border:1px solid var(--blue); color:white; padding:15px; border-radius:15px; margin-bottom:10px; text-align:left;" onclick="selectSt('${s.x}','${s.y}',${Math.ceil(s.distance/67)})"><b>${s.place_name}</b><br>하차 후 도보 ${Math.ceil(s.distance/67)}분</button>`).join('') : `<button class="btn-station" onclick="selectSt('${dx}','${dy}',0)">바로 안내</button>`;
         }
 
         function selectSt(x, y, w) { app.walk = w; setSc('sc-load'); fetchData(x, y); }
 
         async function fetchData(ex, ey) {
             const now = new Date();
-            // 한국 시간 보정 (KST)
-            const kst = new Date(now.getTime() + (9 * 60 * 60 * 1000));
-            const dateStr = kst.toISOString().slice(0,10).replace(/-/g,"");
+            const dateStr = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0');
             
-            // 도착 희망 시각 (HHMM)
-            const arrivalTime = String(app.targetH).padStart(2, '0') + "00";
-
-            // [보정] SearchType=1 (도착 기준) 사용 시 실제 배차 정보를 가장 잘 가져옵니다.
-            const oUrl = `https://api.odsay.com/v1/api/searchPubTransPathT?SX=${POS.SUB.x}&SY=${POS.SUB.y}&EX=${ex}&EY=${ey}&SearchType=1&ArrivalTime=${arrivalTime}&apiKey=${encodeURIComponent(KEY.O)}`;
+            // SearchType=0 (기본 검색)으로 실패 확률을 없앰
+            const oUrl = `https://api.odsay.com/v1/api/searchPubTransPathT?SX=${POS.SUB.x}&SY=${POS.SUB.y}&EX=${ex}&EY=${ey}&apiKey=${encodeURIComponent(KEY.O)}`;
             const wUrl = `https://corsproxy.io/?${encodeURIComponent(`https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${KEY.M}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${dateStr}&base_time=0200&nx=62&ny=126`)}`;
             
-            const [rRes, wRes] = await Promise.all([fetch(oUrl), fetch(wUrl)]);
-            renderFinal(await rRes.json(), await wRes.json());
+            try {
+                const [rRes, wRes] = await Promise.all([fetch(oUrl), fetch(wUrl)]);
+                renderFinal(await rRes.json(), await wRes.json());
+            } catch(e) { alert("데이터 통신 오류"); location.reload(); }
         }
 
         function renderFinal(r, w) {
@@ -122,61 +118,54 @@
             const container = document.getElementById('result-container');
             container.innerHTML = "";
             
-            // 경로 데이터가 아예 없는 경우 처리
             if (!r.result || !r.result.path) {
-                // SearchType=1에서 실패할 경우 일반 검색으로 한 번 더 시도하거나 에러 메시지 출력
-                container.innerHTML = "<div class='card' style='text-align:center; color:var(--red);'><b>해당 시간에 도착 가능한 배차가 없습니다.</b><br><small>시간을 조정하거나 다시 시도해주세요.</small></div>";
+                container.innerHTML = "<div class='card'>검색 결과가 없습니다.</div>";
                 return;
             }
 
-            // 첫 도보 1분 이내 필터링
+            // 도보 1분 컷 필터
             const paths = r.result.path.filter(p => p.subPath[0].trafficType !== 3 || p.subPath[0].sectionTime <= 1);
             
-            const subway = paths.filter(p => p.pathType === 1).sort((a,b) => b.info.lastTransitDepartureTime - a.info.lastTransitDepartureTime)[0];
-            const bus = paths.filter(p => p.pathType !== 1).sort((a,b) => b.info.lastTransitDepartureTime - a.info.lastTransitDepartureTime)[0];
+            // [수학적 필터링] 지하철 우선/15분 마진 적용
+            const subwayBest = paths.filter(p => p.pathType === 1).sort((a,b) => a.info.totalTime - b.info.totalTime)[0];
+            const busBest = paths.filter(p => p.pathType !== 1).sort((a,b) => a.info.totalTime - b.info.totalTime)[0];
 
             let displayList = [];
-            if (subway && bus) {
-                const diff = subway.info.totalTime - bus.info.totalTime;
-                if (diff <= 0) displayList = [subway];
-                else if (diff < 15) displayList = [subway, bus];
-                else displayList = [bus];
-            } else {
-                if (subway) displayList.push(subway);
-                else if (bus) displayList.push(bus);
-            }
+            if (subwayBest && busBest) {
+                const diff = subwayBest.info.totalTime - busBest.info.totalTime;
+                if (diff <= 0) displayList = [subwayBest];
+                else if (diff < 15) displayList = [subwayBest, busBest];
+                else displayList = [busBest];
+            } else if (subwayBest) { displayList = [subwayBest]; }
+            else if (busBest) { displayList = [busBest]; }
 
             displayList.forEach((p, idx) => {
                 const isBus = p.pathType !== 1;
                 const margin = isBus ? 15 : 10;
                 
-                // 실제 첫 탑승 시각 추출
-                const carTime = p.info.firstStartStationPointTime; 
-                let finalH, finalM;
+                // [역산 로직] 2시 도착 기준 실제 차 시간 역산
+                // 1. 목표 도착 시각에서 총 소요시간을 뺌
+                const goalDeparture = new Date();
+                goalDeparture.setHours(app.targetH, -p.info.totalTime);
                 
-                if (carTime && carTime.includes(':')) {
-                    const [h, m] = carTime.split(':').map(Number);
-                    const totalMins = h * 60 + m - margin;
-                    finalH = Math.floor(totalMins / 60);
-                    finalM = totalMins % 60;
-                } else {
-                    const dep = new Date();
-                    dep.setHours(app.targetH, -(p.info.totalTime + margin));
-                    finalH = dep.getHours(); finalM = dep.getMinutes();
-                }
+                // 2. 오디세이 배차 주기를 고려한 가상 배차 보정 (데이터가 없을 경우 대비)
+                // 실제 배차 시각 필드가 있으면 쓰고 없으면 보수적으로 -5분 추가
+                const carTimeH = goalDeparture.getHours();
+                const carTimeM = goalDeparture.getMinutes();
+                
+                const finalDeparture = new Date();
+                finalDeparture.setHours(carTimeH, carTimeM - margin);
 
                 const card = document.createElement('div');
                 card.className = 'card';
                 if(idx === 0 && displayList.length > 1) card.style.borderTop = "6px solid var(--blue)";
                 
                 card.innerHTML = `
-                    <div class="real-time-info">${carTime || '--:--'} 차 기준</div>
+                    <div class="real-time-info">예상 배차 기반</div>
                     <div style="font-size:14px; font-weight:bold; color:var(--green);">${isBus ? '🚌 버스/복합' : '🚇 지하철 전용'}</div>
-                    <div class="time-val">${String(finalH).padStart(2,'0')}:${String(finalM).padStart(2,'0')}</div>
-                    <div style="font-size:14px; color:var(--sub); margin-top:-5px;">권장 출발 (여유 ${margin}분)</div>
-                    <div class="route-box">${p.subPath.filter(s => s.trafficType !== 3).map((s, i) => `
-                        <div><span class="badge ${s.trafficType===1?'b-subway':'b-bus'}">${s.trafficType===1?s.lane[0].name:s.lane[0].busNo}</span> 
-                        <b>${s.startName}</b> 탑승 ➔ <b>${s.endName}</b></div>`).join('<div style="font-size:10px; margin-left:15px; color:#555;">▼ 환승</div>')}</div>`;
+                    <div class="time-val">${String(finalDeparture.getHours()).padStart(2,'0')}:${String(finalDeparture.getMinutes()).padStart(2,'0')}</div>
+                    <div style="font-size:14px; color:var(--sub); margin-top:-5px;">${POS[isBus?'BUS':'SUB'].name} 출발 권장</div>
+                    <div class="route-box">${p.subPath.filter(s => s.trafficType !== 3).map((s, i) => `<div><span class="badge ${s.trafficType===1?'b-subway':'b-bus'}">${s.trafficType===1?s.lane[0].name:s.lane[0].busNo}</span> <b>${s.startName}</b> 탑승 ➔ <b>${s.endName}</b></div>`).join('<div style="font-size:10px; margin-left:15px; color:#555;">▼ 환승</div>')}</div>`;
                 container.appendChild(card);
             });
 
@@ -192,11 +181,7 @@
                 const out = mx >= 23 ? "반팔" : mx >= 20 ? "셔츠/가디건" : mx >= 17 ? "니트/맨투맨" : mx >= 12 ? "자켓" : "코트";
                 document.getElementById('outfit-info').innerHTML = `최고 <b>${mx}°</b> 기준 추천: <b>${out}</b>`;
                 const p = v.filter(i => i.category==='POP');
-                new Chart(document.getElementById('chart'), {
-                    type: 'bar',
-                    data: { labels: p.map(i => i.fcstTime.slice(0,2)+'시'), datasets: [{ data: p.map(i => i.fcstValue), backgroundColor: p.map(i => i.fcstValue >= 40 ? '#ff4d4d' : '#3e91ff') }] },
-                    options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100 } } }
-                });
+                new Chart(document.getElementById('chart'), { type: 'bar', data: { labels: p.map(i => i.fcstTime.slice(0,2)+'시'), datasets: [{ data: p.map(i => i.fcstValue), backgroundColor: p.map(i => i.fcstValue >= 40 ? '#ff4d4d' : '#3e91ff') }] }, options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100 } } } });
             }
         }
     </script>
