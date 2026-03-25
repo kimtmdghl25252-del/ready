@@ -3,77 +3,79 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 Premium v16.0</title>
+    <title>S26 Premium v17.0</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        :root { --bg: #000000; --card: #1c1c1e; --blue: #0a84ff; --green: #30d158; --red: #ff453a; --text: #ffffff; }
-        body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+        :root { --bg: #000000; --card: #151517; --blue: #0a84ff; --green: #30d158; --red: #ff453a; --text: #ffffff; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; }
+        .container { padding: 25px; max-width: 500px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 30px; }
+        .station-name { font-size: 28px; font-weight: 900; color: var(--blue); letter-spacing: -1px; }
+        .ver { font-size: 10px; background: #333; padding: 2px 8px; border-radius: 6px; color: #888; }
         
-        .container { padding: 20px; max-width: 500px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
-        .brand { font-size: 20px; font-weight: 900; color: var(--blue); }
-        .ver { font-size: 10px; color: #555; border: 1px solid #333; padding: 2px 6px; border-radius: 4px; }
+        /* 메인 카드: 다음 열차 기준 출발 시각 */
+        .departure-card { background: linear-gradient(160deg, #1c1c1e, #000); border-radius: 32px; padding: 35px; border: 1px solid #2c2c2e; margin-bottom: 25px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+        .dep-label { font-size: 14px; color: #8e8e93; font-weight: bold; margin-bottom: 15px; }
+        .dep-time { font-size: 82px; font-weight: 900; color: var(--blue); letter-spacing: -4px; line-height: 1; }
+        .dep-info { margin-top: 15px; font-size: 16px; color: var(--green); font-weight: bold; }
 
-        /* 메인 권장 출발 시각 카드 */
-        .main-card { background: linear-gradient(145deg, #1c1c1e, #121212); border-radius: 30px; padding: 30px; border: 1px solid #2c2c2e; margin-bottom: 20px; text-align: center; }
-        .label { font-size: 14px; color: #8e8e93; font-weight: 600; }
-        .departure-time { font-size: 72px; font-weight: 900; color: var(--blue); letter-spacing: -3px; margin: 10px 0; line-height: 1; }
-        .sub-label { font-size: 16px; color: var(--green); font-weight: bold; }
-
-        /* 실제 시간표 리스트 */
+        /* 실제 배차 리스트 */
         .board { background: var(--card); border-radius: 24px; padding: 20px; border: 1px solid #222; }
-        .board-title { font-size: 13px; color: #555; margin-bottom: 15px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
-        .train-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #2c2c2e; }
-        .train-item:last-child { border-bottom: none; }
-        .train-info { display: flex; flex-direction: column; }
-        .t-time { font-size: 18px; font-weight: 800; color: #fff; }
-        .t-dest { font-size: 12px; color: #888; }
-        .t-door { font-size: 14px; font-weight: bold; color: var(--blue); }
+        .board-title { font-size: 12px; color: #555; margin-bottom: 15px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; }
+        .t-item { display: flex; justify-content: space-between; align-items: center; padding: 18px 0; border-bottom: 1px solid #222; }
+        .t-item:last-child { border-bottom: none; }
+        .t-time { font-size: 20px; font-weight: 800; color: #fff; }
+        .t-meta { font-size: 12px; color: #666; margin-top: 2px; }
+        .t-door { text-align: right; }
+        .door-val { font-size: 18px; font-weight: 800; color: var(--blue); }
+        .door-label { font-size: 10px; color: #555; font-weight: bold; }
 
-        .error-msg { color: var(--red); padding: 20px; text-align: center; font-size: 14px; }
+        .loading { padding: 50px; text-align: center; color: var(--blue); font-weight: bold; }
     </style>
 </head>
 <body>
 
     <div class="container">
         <div class="header">
-            <div class="brand">S26 Premium</div>
-            <div class="ver">v16.0 REAL-DB</div>
+            <div>
+                <span class="ver">v17.0 REAL-TIME</span>
+                <div class="station-name">상일동역 <span style="font-size: 16px; color: #444;">5호선</span></div>
+            </div>
+            <div id="clock" style="font-weight: 900; color: #444; font-size: 20px;">00:00</div>
         </div>
 
-        <div id="main-display">
-            <div class="main-card">
-                <div class="label">상일동역 데이터 동기화 중...</div>
-            </div>
+        <div id="main-content">
+            <div class="loading"><i class="fas fa-circle-notch fa-spin"></i> 실제 배차표 긁어오는 중...</div>
         </div>
 
         <div class="board">
-            <div class="board-title"><i class="fas fa-train"></i> 상일동역 5호선 실제 배차표</div>
-            <div id="list-display"></div>
+            <div class="board-title">상일동역 공식 시간표 기반 (마진 10분)</div>
+            <div id="list-content"></div>
         </div>
     </div>
 
     <script>
         const API_KEY = 'Rdv6LaA8z0P2BHkKrh/DsA';
         const SANGIL_ID = "553";
-        const MARGIN = 10; // 지하철 마진 10분
+        const MARGIN = 10;
 
-        async function fetchTimetable() {
+        async function getRealData() {
             const now = new Date();
             const dayTag = now.getDay() === 0 ? 3 : (now.getDay() === 6 ? 2 : 1);
             
-            // CORS 프록시를 통해 데이터 로드 실패 방지
+            // 더 강력한 프록시 사용 (allorigins)
             const targetUrl = `https://api.odsay.com/v1/api/subwayTimeTable?stationID=${SANGIL_ID}&dayTag=${dayTag}&apiKey=${encodeURIComponent(API_KEY)}`;
-            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
 
             try {
                 const res = await fetch(proxyUrl);
-                const data = await res.json();
+                const json = await res.json();
+                const data = JSON.parse(json.contents);
                 
-                if(!data.result) throw new Error("데이터 형식이 올바르지 않습니다.");
+                if(!data.result) throw new Error("API 응답 없음");
                 
-                // 하행(방화/여의도 방면) 및 상행 시간표 통합 후 정렬
-                const combined = [
+                // 상/하행 데이터 통합 및 시간순 정렬
+                const allTrains = [
                     ...(data.result.OrdList.up.list || []),
                     ...(data.result.OrdList.down.list || [])
                 ].map(t => {
@@ -81,53 +83,54 @@
                     return { ...t, mins: h * 60 + m };
                 }).sort((a,b) => a.mins - b.mins);
 
-                render(combined);
+                render(allTrains, now);
             } catch(e) {
-                document.getElementById('main-display').innerHTML = `<div class="error-msg">API 연결 실패: ${e.message}<br>잠시 후 다시 시도해주세요.</div>`;
+                document.getElementById('main-content').innerHTML = `<div style="color:red; text-align:center; padding:20px;">데이터 로드 실패: ${e.message}</div>`;
             }
         }
 
-        function render(list) {
-            const now = new Date();
+        function render(list, now) {
             const nowMins = now.getHours() * 60 + now.getMinutes();
-            
-            // 현재 시각 이후의 가장 빠른 열차들
-            const upcoming = list.filter(t => t.mins >= nowMins).slice(0, 5);
+            const upcoming = list.filter(t => t.mins >= nowMins).slice(0, 6);
 
             if(upcoming.length > 0) {
                 const best = upcoming[0];
                 const doorMins = best.mins - MARGIN;
-                const doorH = Math.floor(doorMins / 60);
-                const doorM = doorMins % 60;
+                const h = Math.floor(doorMins / 60);
+                const m = doorMins % 60;
 
-                // 메인 카드 업데이트
-                document.getElementById('main-display').innerHTML = `
-                    <div class="main-card">
-                        <div class="label">지금 바로 나서야 할 시간</div>
-                        <div class="departure-time">${String(doorH).padStart(2,'0')}:${String(doorM).padStart(2,'0')}</div>
-                        <div class="sub-label">${best.departureTime} 열차 탑승 기준 (-${MARGIN}분)</div>
+                // 최상단 메인 카드
+                document.getElementById('main-content').innerHTML = `
+                    <div class="departure-card">
+                        <div class="dep-label">지금 현관문을 나서야 할 시각</div>
+                        <div class="dep-time">${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}</div>
+                        <div class="dep-info"><i class="fas fa-train"></i> ${best.departureTime} (${best.endStationName}행) 기준</div>
                     </div>
                 `;
 
-                // 리스트 업데이트
-                document.getElementById('list-display').innerHTML = upcoming.map(t => {
+                // 하단 상세 리스트
+                document.getElementById('list-content').innerHTML = upcoming.map((t, idx) => {
                     const dm = t.mins - MARGIN;
                     return `
-                        <div class="train-item">
-                            <div class="train-info">
+                        <div class="t-item" style="${idx === 0 ? 'opacity: 0.5;' : ''}">
+                            <div class="t-info">
                                 <div class="t-time">${t.departureTime}</div>
-                                <div class="t-dest">${t.endStationName}행</div>
+                                <div class="t-meta">${t.endStationName}행</div>
                             </div>
-                            <div class="t-door">${String(Math.floor(dm/60)).padStart(2,'0')}:${String(dm%60).padStart(2,'0')} 출발</div>
+                            <div class="t-door">
+                                <div class="door-label">권장 출발</div>
+                                <div class="door-val">${String(Math.floor(dm/60)).padStart(2,'0')}:${String(dm%60).padStart(2,'0')}</div>
+                            </div>
                         </div>
                     `;
                 }).join('');
             }
+            
+            document.getElementById('clock').innerText = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
         }
 
-        fetchTimetable();
-        // 1분마다 자동 갱신
-        setInterval(fetchTimetable, 60000);
+        getRealData();
+        setInterval(getRealData, 30000); // 30초마다 팩트 체크
     </script>
 </body>
 </html>
