@@ -179,18 +179,17 @@
             } catch (err) { alert(err.message); location.reload(); }
         }
 
-        // [핵심 변경] 오디세이 경로 중 첫 도보 시간이 0분인(직행) 경로만 걸러내는 함수
-        function getZeroWalkPath(apiResult) {
+        // [핵심 변경] 첫 도보 시간이 1분 이하인(거의 직행) 경로만 걸러내는 함수
+        function getDirectPath(apiResult) {
             if (!apiResult || !apiResult.result || !apiResult.result.path) return null;
             
-            // 반환된 여러 경로 중에서 필터링
             const validPath = apiResult.result.path.find(p => {
                 if (!p.subPath || p.subPath.length === 0) return false;
                 
                 const firstStep = p.subPath[0];
-                // 첫 구간이 도보(trafficType: 3)일 경우, 반드시 걸리는 시간이 0분이어야 함
+                // 첫 구간이 도보(trafficType: 3)일 경우, 걸리는 시간이 1분 이하(0분 또는 1분)여야 함
                 if (firstStep.trafficType === 3) {
-                    return firstStep.sectionTime === 0;
+                    return firstStep.sectionTime <= 1; 
                 }
                 // 첫 구간이 도보가 아니라 바로 탑승(버스/지하철)이면 합격
                 return true; 
@@ -219,16 +218,16 @@
         }
 
         function updateFinalUI(weather, rA, rB) {
-            // [적용] 무조건 검색된 첫 경로가 아니라, 도보 0분인 경로만 쏙 빼옵니다.
-            const pathA = getZeroWalkPath(rA);
-            const pathB = getZeroWalkPath(rB);
+            // [적용] 도보 1분 이하 조건의 함수로 변경
+            const pathA = getDirectPath(rA);
+            const pathB = getDirectPath(rB);
 
             const tA = pathA ? pathA.info.totalTime : 999;
             const tB = pathB ? pathB.info.totalTime : 999;
             
             if (tA === 999 && tB === 999) {
                 document.getElementById('safety-time').innerText = "조회 불가";
-                document.getElementById('route-detail').innerHTML = "지정하신 정류장(역)에서 환승 없이 한 번에 탑승 가능한 노선이 없거나, 서버 지연 중입니다.";
+                document.getElementById('route-detail').innerHTML = "지정하신 정류장(역)에서 도보 1분 이내로 탑승 가능한 노선이 없거나, 서버 응답이 지연되고 있습니다.";
             } else {
                 // 버스가 15분 이상 빠를 때만 버스 채택
                 const useBus = (tA - tB >= 15);
