@@ -3,47 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 프리미엄 외출 비서</title>
+    <title>S26 프리미엄 외출 비서 (디버깅 모드)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        :root { --bg-color: #121212; --card-bg: #1e1e1e; --text-main: #ffffff; --text-sub: #aaaaaa; --accent-blue: #3e91ff; }
+        :root { --bg-color: #121212; --card-bg: #1e1e1e; --text-main: #ffffff; --text-sub: #aaaaaa; --accent-blue: #3e91ff; --error-red: #ff4d4d; }
         body { margin: 0; padding: 0; background-color: var(--bg-color); color: var(--text-main); font-family: sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
         #initial-screen { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 30px; padding: 40px; }
         .large-btn { width: 100%; height: 120px; background-color: var(--card-bg); border: 2px solid #333; border-radius: 25px; color: var(--text-main); font-size: 22px; font-weight: bold; display: flex; justify-content: center; align-items: center; gap: 15px; cursor: pointer; }
         #loading-screen { display: none; flex: 1; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; color: var(--text-sub); }
+        #debug-log { background: #000; color: #00ff00; padding: 15px; border-radius: 10px; font-family: monospace; font-size: 12px; margin: 20px; white-space: pre-wrap; word-wrap: break-word; display: none; border: 1px solid #333; }
         #result-screen { display: none; padding: 20px; flex-direction: column; gap: 20px; padding-bottom: 40px; }
-        .card { background-color: var(--card-bg); border-radius: 20px; padding: 20px; border: 1px solid #2a2a2a; }
-        #safety-time { font-size: 40px; font-weight: 900; color: var(--accent-blue); margin: 10px 0; }
-        .outfit-row { display: flex; align-items: center; gap: 15px; padding: 15px; background: #2a2a2a; border-radius: 15px; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
     <div id="initial-screen">
-        <button class="large-btn" onclick="startProcess('direct')"><i class="fas fa-map-marker-alt"></i> 목적지 바로 앞까지</button>
-        <button class="large-btn" onclick="startProcess('station')"><i class="fas fa-subway"></i> 근처 지하철역까지만</button>
+        <button class="large-btn" onclick="startProcess('direct')"><i class="fas fa-bug"></i> PC버전 오류 추적 시작</button>
     </div>
 
     <div id="loading-screen">
         <i class="fas fa-spinner fa-spin" style="font-size:50px; color:var(--accent-blue); margin-bottom:20px;"></i>
-        <div id="loading-text">장소와 시간을 말씀해주세요...</div>
+        <div id="loading-text">장소를 말씀해주세요...</div>
     </div>
 
+    <div id="debug-log"></div>
+
     <div id="result-screen">
-        <div class="card" style="border: 2px solid var(--accent-blue);">
-            <div style="font-size: 16px;">⏰ 최종 출발 시각</div>
-            <div id="safety-time">--:--</div>
-            <div id="route-detail" style="font-size:15px; color:var(--text-sub);">데이터 계산 중...</div>
-        </div>
-        <div id="outfit-area" class="card">
-            <h2 style="font-size:18px; margin:0 0 15px 0;">🌡️ 옷차림 추천</h2>
-            <div id="outfit-list"></div>
-        </div>
-        <div class="card" id="rain-card">
-            <div style="font-size:16px; margin-bottom:10px;">☂️ 목적지 강수 확률</div>
-            <div style="height:200px;"><canvas id="rainChart"></canvas></div>
-        </div>
+        <h3 style="text-align:center; color: var(--accent-blue);">정상 작동 성공!</h3>
     </div>
 
     <script>
@@ -51,27 +38,41 @@
         const KMA_KEY = 'ddfd71d0b929827fd9c3c1851b50c301f9afb482a3143c0b39e135f9b3b8f070';
         const ODSAY_KEY = 'Rdv6LaA8z0P2BHkKrh/DsA';
 
-        const SANGIL_SUBWAY = { name: "상일동역 (지하철)", sx: 127.1735, sy: 37.5519, mode: 'subway' };
-        const SANGIL_BUS = { name: "상일동역1번출구 (버스)", sx: 127.1741, sy: 37.5524, mode: 'bus' };
+        const SANGIL_SUBWAY = { name: "상일동역", sx: 127.1735, sy: 37.5519 };
+        let state = { placeName: null, targetTime: null, targetCoords: null };
 
-        let state = { destMode: null, placeName: null, targetTime: null, targetCoords: null };
+        // 화면에 로그를 찍는 함수
+        function logDebug(title, message) {
+            const logDiv = document.getElementById('debug-log');
+            logDiv.style.display = 'block';
+            logDiv.innerHTML += `<b>[${title}]</b>\n${message}\n\n`;
+            console.log(`[${title}]`, message);
+        }
 
-        // [핵심 수정] 카카오 API 키(헤더)를 받을 수 있도록 안전망 업그레이드
-        async function fetchSafe(url, options = {}) {
+        async function fetchWithDebug(name, url, options = {}) {
             try {
-                const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-                const res = await fetch(proxyUrl, options);
-                if (!res.ok) return null;
-                return await res.json();
-            } catch (e) {
-                return null;
+                logDebug(name + " 요청", url);
+                const response = await fetch(url, options);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    logDebug(name + " 실패 (HTTP " + response.status + ")", errorText);
+                    throw new Error(`${name} 서버 에러: HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                logDebug(name + " 성공 응답", JSON.stringify(data).substring(0, 200) + "... (생략됨)");
+                return data;
+            } catch (error) {
+                logDebug(name + " 완전 실패 (CORS 또는 네트워크)", error.message);
+                throw error;
             }
         }
 
         function startProcess(mode) {
-            state.destMode = mode;
             document.getElementById('initial-screen').style.display = 'none';
             document.getElementById('loading-screen').style.display = 'flex';
+            document.getElementById('debug-log').innerHTML = ''; // 로그 초기화
             
             const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
             recognition.lang = 'ko-KR';
@@ -88,107 +89,42 @@
 
                 state.targetTime = parseInt(timeMatch[1]);
                 state.placeName = text.replace(timeMatch[0], "").replace(/[.,]/g, "").trim();
-                document.getElementById('loading-text').innerHTML = `<b>'${state.placeName}'</b> 찾는 중...`;
+                document.getElementById('loading-text').innerHTML = `<b>'${state.placeName}'</b> 추적 중...`;
 
                 try {
-                    // 1. 카카오 검색 (API 키 정상 전달!)
+                    // 1. 카카오 검색 (우회 프록시 사용)
                     const kakaoUrl = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(state.placeName)}`;
-                    const kakaoData = await fetchSafe(kakaoUrl, { headers: { 'Authorization': `KakaoAK ${KAKAO_KEY}` } });
-
-                    if (!kakaoData || !kakaoData.documents || kakaoData.documents.length === 0) {
-                        throw new Error(`'${state.placeName}'(을)를 지도에서 찾을 수 없습니다.`);
-                    }
-
-                    state.targetCoords = { x: kakaoData.documents[0].x, y: kakaoData.documents[0].y };
-                    document.getElementById('loading-text').innerHTML = `최적의 경로와 날씨를<br>계산하고 있습니다...`;
-
-                    // 2. 기상청 & 오디세이 병렬 호출
-                    const encodedOdsayKey = encodeURIComponent(ODSAY_KEY);
-                    const now = new Date();
-                    const dateStr = now.toISOString().slice(0,10).replace(/-/g,"");
+                    const kakaoProxy = `https://corsproxy.io/?${encodeURIComponent(kakaoUrl)}`;
                     
-                    const kmaUrl = `https://apis.data.go.kr/1360000/VilageFrcstInfoService_2.0/getVilageFrcst?serviceKey=${KMA_KEY}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${dateStr}&base_time=0200&nx=62&ny=126`;
+                    const kakaoData = await fetchWithDebug("카카오맵", kakaoProxy, { 
+                        headers: { 'Authorization': `KakaoAK ${KAKAO_KEY}` } 
+                    });
+
+                    if (!kakaoData.documents || kakaoData.documents.length === 0) {
+                        throw new Error(`'${state.placeName}' 검색 결과가 없습니다.`);
+                    }
+                    state.targetCoords = { x: kakaoData.documents[0].x, y: kakaoData.documents[0].y };
+
+                    // 2. 오디세이 (교통) - 프록시 없이 직접 호출 테스트
+                    const encodedOdsayKey = encodeURIComponent(ODSAY_KEY);
                     const odAUrl = `https://api.odsay.com/v1/api/searchPubTransPathT?SX=${SANGIL_SUBWAY.sx}&SY=${SANGIL_SUBWAY.sy}&EX=${state.targetCoords.x}&EY=${state.targetCoords.y}&apiKey=${encodedOdsayKey}`;
-                    const odBUrl = `https://api.odsay.com/v1/api/searchPubTransPathT?SX=${SANGIL_BUS.sx}&SY=${SANGIL_BUS.sy}&EX=${state.targetCoords.x}&EY=${state.targetCoords.y}&apiKey=${encodedOdsayKey}`;
+                    await fetchWithDebug("오디세이(교통)", odAUrl);
 
-                    const [weatherData, rA, rB] = await Promise.all([
-                        fetchSafe(kmaUrl),
-                        fetchSafe(odAUrl),
-                        fetchSafe(odBUrl)
-                    ]);
+                    // 3. 기상청 (날씨) - 프록시 없이 직접 호출 테스트
+                    const dateStr = new Date().toISOString().slice(0,10).replace(/-/g,"");
+                    const kmaUrl = `https://apis.data.go.kr/1360000/VilageFrcstInfoService_2.0/getVilageFrcst?serviceKey=${KMA_KEY}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${dateStr}&base_time=0200&nx=62&ny=126`;
+                    await fetchWithDebug("기상청(날씨)", kmaUrl);
 
-                    updateFinalUI(weatherData, rA, rB);
+                    document.getElementById('loading-screen').style.display = 'none';
+                    document.getElementById('result-screen').style.display = 'flex';
 
                 } catch (err) {
-                    alert(err.message);
-                    location.reload();
+                    alert("에러 발생! 검은색 디버그 로그 창을 확인해주세요.\n" + err.message);
+                    document.getElementById('loading-screen').style.display = 'none';
                 }
             };
 
-            recognition.onerror = () => {
-                alert("음성 인식 실패. 다시 버튼을 눌러주세요.");
-                location.reload();
-            };
-
             recognition.start();
-        }
-
-        function updateFinalUI(weather, rA, rB) {
-            // 교통 로직
-            const tA = (rA && rA.result) ? rA.result.path[0].info.totalTime : 999;
-            const tB = (rB && rB.result) ? rB.result.path[0].info.totalTime : 999;
-            
-            if (tA === 999 && tB === 999) {
-                document.getElementById('safety-time').innerText = "오류";
-                document.getElementById('route-detail').innerHTML = "대중교통 서버(ODsay) 응답이 지연되고 있습니다.<br>잠시 후 다시 시도해주세요.";
-            } else {
-                const useBus = (tA - tB >= 15);
-                const final = useBus ? { name: "상일동역1번출구 (버스 탑승)", time: tB, margin: 25 } : { name: "상일동역 (지하철 탑승)", time: tA, margin: 10 };
-                
-                const depTime = new Date();
-                depTime.setHours(state.targetTime, -(final.time + final.margin));
-                
-                const hours = String(depTime.getHours()).padStart(2, '0');
-                const mins = String(depTime.getMinutes()).padStart(2, '0');
-                
-                document.getElementById('safety-time').innerText = `${hours}:${mins}`;
-                document.getElementById('route-detail').innerHTML = `<b>${final.name}</b> 출발 추천<br>(이동 ${final.time}분 + 여유 ${final.margin}분 포함)`;
-            }
-
-            // 날씨 로직
-            const items = (weather && weather.response && weather.response.body) ? weather.response.body.items.item : [];
-            
-            if(items.length > 0) {
-                const tmpItems = items.filter(i => i.category === 'TMP');
-                const maxTemp = Math.max(...tmpItems.map(i => parseInt(i.fcstValue)));
-                
-                let outfitMsg = maxTemp >= 23 ? "반팔, 얇은 셔츠" : maxTemp >= 20 ? "얇은 가디건, 면바지" : maxTemp >= 17 ? "맨투맨, 가디건" : maxTemp >= 12 ? "자켓, 야상" : "코트, 따뜻한 겉옷";
-                document.getElementById('outfit-list').innerHTML = `<div class="outfit-row"><i class="fas fa-tshirt" style="font-size:24px;"></i> <div><b>최고 ${maxTemp}°C</b><br>${outfitMsg}</div></div>`;
-
-                const popItems = items.filter(i => i.category === 'POP').slice(0, 10);
-                new Chart(document.getElementById('rainChart'), {
-                    type: 'line',
-                    data: {
-                        labels: popItems.map(i => i.fcstTime.slice(0,2) + '시'),
-                        datasets: [{
-                            label: '강수확률(%)',
-                            data: popItems.map(i => parseInt(i.fcstValue)),
-                            borderColor: '#3e91ff',
-                            backgroundColor: 'rgba(62, 145, 255, 0.2)',
-                            borderWidth: 3,
-                            fill: true,
-                            tension: 0.3
-                        }]
-                    },
-                    options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100 } } }
-                });
-            } else {
-                document.getElementById('outfit-list').innerHTML = `<div style="padding:15px;">현재 기상청 응답이 지연되고 있습니다.</div>`;
-                document.getElementById('rain-card').style.display = 'none';
-            }
-
-            document.getElementById('loading-screen').style.display = 'none';
-            document.getElementById('result-screen').style.display = 'flex';
         }
     </script>
 </body>
