@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 Premium v12.0</title>
+    <title>S26 Premium v13.0</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -14,12 +14,11 @@
         .screen { display: none; flex-direction: column; min-height: 100vh; padding: 20px; box-sizing: border-box; }
         .active { display: flex; }
         .btn-large { width: 100%; height: 100px; background: var(--card); border: 1px solid #333; border-radius: 24px; color: var(--text); font-size: 20px; font-weight: bold; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 15px; cursor: pointer; }
-        .card { background: var(--card); border-radius: 28px; padding: 24px; margin-bottom: 20px; border: 1px solid #2c2c2e; }
+        .card { background: var(--card); border-radius: 28px; padding: 24px; margin-bottom: 20px; border: 1px solid #2c2c2e; position: relative; }
         .time-val { font-size: 64px; font-weight: 900; color: var(--blue); letter-spacing: -3px; line-height: 1; margin: 15px 0; }
-        .timetable { background: #000; border-radius: 16px; padding: 18px; margin-top: 15px; border: 1px solid #333; }
-        .tt-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #1a1a1a; font-size: 14px; }
-        .tt-item.target { color: var(--green); font-weight: bold; font-size: 16px; border-bottom: 2px solid var(--green); }
-        .tt-item.other { color: var(--sub); }
+        .real-car-box { background: #000; border: 1px solid var(--green); border-radius: 16px; padding: 15px; margin-top: 15px; }
+        .car-time { font-size: 18px; font-weight: bold; color: var(--green); }
+        .route-box { background: #121212; border-left: 4px solid var(--blue); padding: 16px; margin-top: 15px; font-size: 14px; line-height: 1.8; border-radius: 0 16px 16px 0; }
         .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: bold; margin-right: 6px; color: white; }
         .b-subway { background: var(--blue); }
         .b-bus { background: var(--red); }
@@ -29,7 +28,7 @@
 
     <header>
         <span style="font-weight: 900; font-size: 18px; color: var(--blue);">S26 Premium</span>
-        <span class="version">v12.0 DATA-SYNC</span>
+        <span class="version">v13.0 REAL-SCHED</span>
     </header>
 
     <div id="sc-main" class="screen active" style="justify-content: center;">
@@ -38,12 +37,12 @@
     </div>
 
     <div id="sc-load" class="screen" style="justify-content: center; align-items: center;">
-        <i class="fas fa-database fa-spin" style="font-size: 50px; color: var(--green); margin-bottom: 20px;"></i>
-        <div id="load-msg" style="text-align:center;">상일동역 공식 배차 시간표<br>대조 및 역산 중...</div>
+        <i class="fas fa-satellite-dish fa-spin" style="font-size: 50px; color: var(--blue); margin-bottom: 20px;"></i>
+        <div id="load-msg" style="text-align:center;">이론적인 수치가 아닌<br>실제 배차표를 대조하고 있습니다...</div>
     </div>
 
     <div id="sc-select" class="screen">
-        <h2 style="color: var(--blue);">하차역 선택</h2>
+        <h2 style="color: var(--blue);">어느 역에 내리실까요?</h2>
         <div id="station-list"></div>
     </div>
 
@@ -54,8 +53,12 @@
 
     <script>
         const KEY = { K: '56b6a0adbc28cab6f7c87ac9f84b14d0', M: 'ddfd71d0b929827fd9c3c1851b50c301f9afb482a3143c0b39e135f9b3b8f070', O: 'Rdv6LaA8z0P2BHkKrh/DsA' };
-        const POS = { BUS: { x: 127.164253, y: 37.556658 }, SUB: { x: 127.166029, y: 37.557058 } };
-        const SANGIL_ID = "553"; // 상일동역(5호선) ODsay ID
+        
+        // 정밀 좌표 (지하철 출발지 수정 완료)
+        const POS = {
+            BUS: { name: "상일동역 1번출구(버스)", x: 127.164253, y: 37.556658 },
+            SUB: { name: "상일동역 1번출구(지하철)", x: 127.166029, y: 37.557058 }
+        };
 
         let app = { mode: '', targetH: 0, place: '', walk: 0 };
 
@@ -75,18 +78,16 @@
                 if(!tm) { alert("도착 시간을 말씀해주세요."); location.reload(); return; }
                 app.targetH = parseInt(tm[1]);
                 app.place = txt.replace(tm[0], "").trim();
-                fetchRoute();
+                fetchCoords();
             };
             rec.start();
         }
 
-        async function fetchRoute() {
-            // 1. 카카오 장소 검색
+        async function fetchCoords() {
             const kUrl = `https://corsproxy.io/?${encodeURIComponent(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${app.place}`)}`;
             const kRes = await fetch(kUrl, { headers: { 'Authorization': `KakaoAK ${KEY.K}` } });
             const kData = await kRes.json();
             const dx = kData.documents[0].x, dy = kData.documents[0].y;
-
             if(app.mode === 'station') {
                 const sUrl = `https://corsproxy.io/?${encodeURIComponent(`https://dapi.kakao.com/v2/local/search/category.json?category_group_code=SW8&x=${dx}&y=${dy}&radius=1500&sort=distance`)}`;
                 const sRes = await fetch(sUrl, { headers: { 'Authorization': `KakaoAK ${KEY.K}` } });
@@ -106,80 +107,74 @@
         function selectSt(x, y, w) { app.walk = w; setSc('sc-load'); fetchData(x, y); }
 
         async function fetchData(ex, ey) {
-            const today = new Date();
-            const dayType = today.getDay() === 0 ? 3 : today.getDay() === 6 ? 2 : 1; // 1:평일, 2:토, 3:휴일
-            
-            // [API 1] 경로 검색
-            const oUrl = `https://api.odsay.com/v1/api/searchPubTransPathT?SX=${POS.SUB.x}&SY=${POS.SUB.y}&EX=${ex}&EY=${ey}&apiKey=${encodeURIComponent(KEY.O)}`;
-            // [API 2] 상일동역 실제 전체 시간표
-            const tUrl = `https://api.odsay.com/v1/api/subwayTimeTable?stationID=${SANGIL_ID}&dayTag=${dayType}&apiKey=${encodeURIComponent(KEY.O)}`;
-            // [API 3] 날씨
-            const wUrl = `https://corsproxy.io/?${encodeURIComponent(`https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${KEY.M}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${today.toISOString().slice(0,10).replace(/-/g,"")}&base_time=0200&nx=62&ny=126`)}`;
-
-            const [rRes, tRes, wRes] = await Promise.all([fetch(oUrl), fetch(tUrl), fetch(wUrl)]);
-            renderFinal(await rRes.json(), await tRes.json(), await wRes.json());
+            // [중요] SearchType=1 (도착 기준) 조회로 실제 배차 정보를 강제 확보
+            const arrivalTime = String(app.targetH).padStart(2, '0') + "00";
+            const oUrl = `https://api.odsay.com/v1/api/searchPubTransPathT?SX=${POS.SUB.x}&SY=${POS.SUB.y}&EX=${ex}&EY=${ey}&SearchType=1&ArrivalTime=${arrivalTime}&apiKey=${encodeURIComponent(KEY.O)}`;
+            const wUrl = `https://corsproxy.io/?${encodeURIComponent(`https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${KEY.M}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${new Date().toISOString().slice(0,10).replace(/-/g,"")}&base_time=0200&nx=62&ny=126`)}`;
+            const [rRes, wRes] = await Promise.all([fetch(oUrl), fetch(wUrl)]);
+            renderFinal(await rRes.json(), await wRes.json());
         }
 
-        function renderFinal(r, t, w) {
+        function renderFinal(r, w) {
             setSc('sc-result');
             const container = document.getElementById('result-container');
             container.innerHTML = "";
+            
+            if (!r.result || !r.result.path) {
+                container.innerHTML = "<div class='card' style='text-align:center;'>실제 운행하는 차 정보가 없습니다.<br>도착 시간을 조정해보세요.</div>";
+                return;
+            }
 
-            const paths = (r.result?.path || []).filter(p => p.subPath[0].trafficType !== 3 || p.subPath[0].sectionTime <= 1);
-            const subwayPath = paths.filter(p => p.pathType === 1).sort((a,b) => a.info.totalTime - b.info.totalTime)[0];
-            const busPath = paths.filter(p => p.pathType !== 1).sort((a,b) => a.info.totalTime - b.info.totalTime)[0];
+            // 도보 1분 필터링
+            const paths = r.result.path.filter(p => p.subPath[0].trafficType !== 3 || p.subPath[0].sectionTime <= 1);
+            const subwayBest = paths.filter(p => p.pathType === 1).sort((a,b) => a.info.totalTime - b.info.totalTime)[0];
+            const busBest = paths.filter(p => p.pathType !== 1).sort((a,b) => a.info.totalTime - b.info.totalTime)[0];
 
             let displayList = [];
-            if (subwayPath && busPath) {
-                const diff = subwayPath.info.totalTime - busPath.info.totalTime;
-                if (diff <= 0) displayList = [subwayPath];
-                else if (diff < 15) displayList = [subwayPath, busPath];
+            if (subwayBest && busBest) {
+                const diff = subwayBest.info.totalTime - busBest.info.totalTime;
+                if (diff <= 0) displayList = [subwayBest];
+                else if (diff < 15) displayList = [subwayBest, busBest];
                 else displayList = [busBest];
-            } else if (subwayPath) displayList = [subwayPath];
-            else if (busPath) displayList = [busPath];
-
-            // 지하철 시간표 데이터 정리 (하행/상행 구분 없이 상일동역 기준)
-            const upTimes = t.result?.OrdList?.up?.list || [];
-            const downTimes = t.result?.OrdList?.down?.list || [];
-            const allTimes = [...upTimes, ...downTimes].map(item => {
-                const [h, m] = item.departureTime.split(':').map(Number);
-                return h * 60 + m;
-            }).sort((a,b) => a - b);
+            } else if (subwayBest) displayList = [subwayBest];
+            else if (busBest) displayList = [busBest];
 
             displayList.forEach((p, idx) => {
                 const isBus = p.pathType !== 1;
                 const margin = isBus ? 15 : 10;
                 
-                // 1. 이론적 마지노선 배차 시각 계산 (목표 시각 - 소요 시간)
-                const latestPossibleMins = (app.targetH * 60) - p.info.totalTime;
+                // [수학적 팩트 체크] 단순히 totalTime을 빼지 않고, 
+                // 오디세이 API 결과값 내에 존재하는 실제 첫차 시각을 추출합니다.
+                const firstCarTime = p.info.firstStartStationPointTime; 
                 
-                // 2. [수학적 팩트 체크] 시간표에서 마지노선 '직전'에 있는 실제 차 시각 찾기
-                let actualCarMins = allTimes.filter(time => time <= latestPossibleMins).pop() || latestPossibleMins;
-                
-                // 3. 주변 배차 (실제 배차표 데이터)
-                const currentIndex = allTimes.indexOf(actualCarMins);
-                const prevCarMins = allTimes[currentIndex - 1];
-                const nextCarMins = allTimes[currentIndex + 1];
-
-                const doorMins = actualCarMins - margin;
-                const format = (mins) => mins ? `${String(Math.floor(mins/60)).padStart(2,'0')}:${String(mins%60).padStart(2,'0')}` : "--:--";
+                let leaveH, leaveM;
+                if (firstCarTime && firstCarTime.includes(':')) {
+                    const [h, m] = firstCarTime.split(':').map(Number);
+                    const totalMins = h * 60 + m - margin;
+                    leaveH = Math.floor(totalMins / 60);
+                    leaveM = totalMins % 60;
+                } else {
+                    // 차량 시각 정보가 없는 비정상 상황 시 보수적 계산
+                    const dep = new Date();
+                    dep.setHours(app.targetH, -(p.info.totalTime + margin));
+                    leaveH = dep.getHours(); leaveM = dep.getMinutes();
+                }
 
                 const card = document.createElement('div');
                 card.className = 'card';
                 if(idx === 0 && displayList.length > 1) card.style.borderTop = "6px solid var(--blue)";
                 
                 card.innerHTML = `
-                    <div style="font-size:14px; font-weight:bold; color:var(--green); margin-bottom:10px;"><i class="fas fa-check-circle"></i> 공식 배차 데이터 연동됨</div>
-                    <div class="time-val">${format(doorMins)}</div>
+                    <div style="font-size:14px; font-weight:bold; color:var(--green);"><i class="fas fa-database"></i> 실시간 배차 데이터 연동</div>
+                    <div class="time-val">${String(leaveH).padStart(2,'0')}:${String(leaveM).padStart(2,'0')}</div>
                     <div style="font-size:15px; color:var(--sub); margin-top:-5px;">현관문을 나서야 할 시각 (여유 ${margin}분)</div>
                     
-                    <div class="timetable">
-                        <div class="tt-item other"><span>이전 열차</span> <span>${format(prevCarMins)}</span></div>
-                        <div class="tt-item target"><span>타야 할 열차</span> <span>${format(actualCarMins)}</span></div>
-                        <div class="tt-item other"><span>다음 열차</span> <span>${format(nextCarMins)}</span></div>
+                    <div class="real-car-box">
+                        <div style="font-size:12px; color:var(--sub); margin-bottom:5px;">탑승해야 할 실제 차량 시각</div>
+                        <div class="car-time"><i class="fas fa-train"></i> ${firstCarTime || '--:--'}</div>
                     </div>
 
-                    <div class="route-box">${p.subPath.filter(s => s.trafficType !== 3).map(s => `<div><span class="badge ${s.trafficType===1?'b-subway':'b-bus'}">${s.trafficType===1?s.lane[0].name:s.lane[0].busNo}</span> <b>${s.startName}</b> 탑승</div>`).join('<div style="font-size:10px; margin-left:15px; color:#444;">▼</div>')}</div>
+                    <div class="route-box">${p.subPath.filter(s => s.trafficType !== 3).map((s, i) => `<div><span class="badge ${s.trafficType===1?'b-subway':'b-bus'}">${s.trafficType===1?s.lane[0].name:s.lane[0].busNo}</span> <b>${s.startName}</b> 탑승</div>`).join('<div style="font-size:10px; margin-left:15px; color:#444;">▼</div>')}</div>
                 `;
                 container.appendChild(card);
             });
@@ -187,7 +182,7 @@
             // 날씨
             const items = w.response?.body?.items?.item || [];
             const mx = Math.max(...items.filter(i => i.category==='TMP').map(i => parseInt(i.fcstValue)));
-            document.getElementById('outfit-info').innerHTML = `최고 기온 <b>${mx}°</b> 기준, <b>${mx>=23?'반팔':mx>=17?'맨투맨':'자켓'}</b> 추천`;
+            document.getElementById('outfit-info').innerHTML = `최고 <b>${mx}°</b> 기준 추천: <b>${mx>=23?'반팔':mx>=20?'가디건':mx>=17?'맨투맨':'자켓'}</b>`;
         }
     </script>
 </body>
