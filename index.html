@@ -79,32 +79,33 @@
                 document.getElementById('loading-text').innerHTML = `<b>'${state.placeName}'</b> 찾는 중...`;
 
                 try {
-                    // [핵심 해결] 한글이 두 번 암호화되지 않도록 프록시 주소 조합 방식 변경
+                    // 1. 카카오 검색 (성공 확인된 로직)
                     const kakaoUrl = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(state.placeName)}`;
-                    const proxyUrl = `https://corsproxy.io/?${kakaoUrl}`; // 여기서 encodeURIComponent를 뺐습니다!
+                    const proxyUrl = `https://corsproxy.io/?${kakaoUrl}`; 
 
-                    const kakaoRes = await fetch(proxyUrl, {
-                        headers: { 'Authorization': `KakaoAK ${KAKAO_KEY}` }
-                    });
-                    
+                    const kakaoRes = await fetch(proxyUrl, { headers: { 'Authorization': `KakaoAK ${KAKAO_KEY}` } });
                     const kakaoData = await kakaoRes.json();
 
-                    // 에러가 나면 카카오가 보내온 원본 메시지를 그대로 띄움
-                    if (!kakaoData.documents) {
-                        throw new Error("카카오 차단 오류: " + JSON.stringify(kakaoData));
-                    }
-                    if (kakaoData.documents.length === 0) {
-                        throw new Error(`'${state.placeName}' 결과가 0개입니다. (다시 한 번 또박또박 말씀해주세요)`);
+                    if (!kakaoData.documents || kakaoData.documents.length === 0) {
+                        throw new Error(`'${state.placeName}'(을)를 찾을 수 없습니다.`);
                     }
 
                     state.targetCoords = { x: kakaoData.documents[0].x, y: kakaoData.documents[0].y };
                     document.getElementById('loading-text').innerHTML = `최적의 경로와 날씨를<br>계산하고 있습니다...`;
 
-                    // 2. 기상청 & 오디세이 데이터 호출
+                    // 2. 기상청 & 오디세이 우회 처리 (allorigins 프록시 사용)
+                    const encodedOdsayKey = encodeURIComponent(ODSAY_KEY);
+                    const dateStr = new Date().toISOString().slice(0,10).replace(/-/g,"");
+                    
+                    const kmaReq = `https://apis.data.go.kr/1360000/VilageFrcstInfoService_2.0/getVilageFrcst?serviceKey=${KMA_KEY}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${dateStr}&base_time=0200&nx=62&ny=126`;
+                    const odAReq = `https://api.odsay.com/v1/api/searchPubTransPathT?SX=${SANGIL_SUBWAY.sx}&SY=${SANGIL_SUBWAY.sy}&EX=${state.targetCoords.x}&EY=${state.targetCoords.y}&apiKey=${encodedOdsayKey}`;
+                    const odBReq = `https://api.odsay.com/v1/api/searchPubTransPathT?SX=${SANGIL_BUS.sx}&SY=${SANGIL_BUS.sy}&EX=${state.targetCoords.x}&EY=${state.targetCoords.y}&apiKey=${encodedOdsayKey}`;
+
+                    // Promise.all 로 한 번에 가져오기
                     const [weatherRes, routeARes, routeBRes] = await Promise.all([
-                        fetch(`https://apis.data.go.kr/1360000/VilageFrcstInfoService_2.0/getVilageFrcst?serviceKey=${KMA_KEY}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${new Date().toISOString().slice(0,10).replace(/-/g,"")}&base_time=0200&nx=62&ny=126`),
-                        fetch(`https://api.odsay.com/v1/api/searchPubTransPathT?SX=${SANGIL_SUBWAY.sx}&SY=${SANGIL_SUBWAY.sy}&EX=${state.targetCoords.x}&EY=${state.targetCoords.y}&apiKey=${encodeURIComponent(ODSAY_KEY)}`),
-                        fetch(`https://api.odsay.com/v1/api/searchPubTransPathT?SX=${SANGIL_BUS.sx}&SY=${SANGIL_BUS.sy}&EX=${state.targetCoords.x}&EY=${state.targetCoords.y}&apiKey=${encodeURIComponent(ODSAY_KEY)}`)
+                        fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(kmaReq)}`),
+                        fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(odAReq)}`),
+                        fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(odBReq)}`)
                     ]);
 
                     const weatherData = await weatherRes.json();
@@ -120,7 +121,7 @@
             };
 
             recognition.onerror = () => {
-                alert("음성 인식에 실패했습니다. 주변이 너무 시끄럽거나 권한이 없습니다.");
+                alert("음성 인식 실패. 주변이 시끄럽거나 권한이 없습니다.");
                 location.reload();
             };
 
@@ -132,7 +133,7 @@
             const tB = rB.result ? rB.result.path[0].info.totalTime : 999;
             
             const useBus = (tA - tB >= 15);
-            const final = useBus ? { name: "상일동역1번출구 (버스 정류장)", time: tB, margin: 25 } : { name: "상일동역 (지하철 탑승)", time: tA, margin: 10 };
+            const final = useBus ? { name: "상일동역1번출구 (버스)", time: tB, margin: 25 } : { name: "상일동역 (지하철)", time: tA, margin: 10 };
             
             const depTime = new Date();
             depTime.setHours(state.targetTime, -(final.time + final.margin));
@@ -141,14 +142,14 @@
             const mins = String(depTime.getMinutes()).padStart(2, '0');
             
             document.getElementById('safety-time').innerText = `${hours}:${mins}`;
-            document.getElementById('route-detail').innerHTML = `<b>${final.name}</b>에서 출발하세요.<br>(소요 ${final.time}분 + 여유 ${final.margin}분 포함)`;
+            document.getElementById('route-detail').innerHTML = `<b>${final.name}</b> 출발<br>(소요 ${final.time}분 + 여유 ${final.margin}분 포함)`;
 
-            const items = weather.response.body.items.item || [];
+            const items = weather.response?.body?.items?.item || [];
             if(items.length > 0) {
                 const tmpItems = items.filter(i => i.category === 'TMP');
                 const maxTemp = Math.max(...tmpItems.map(i => parseInt(i.fcstValue)));
                 
-                let outfitMsg = maxTemp >= 23 ? "반팔, 얇은 셔츠" : maxTemp >= 20 ? "얇은 가디건, 긴팔, 면바지" : maxTemp >= 17 ? "얇은 니트, 맨투맨, 청바지" : maxTemp >= 12 ? "자켓, 가디건, 야상" : "자켓, 트렌치코트";
+                let outfitMsg = maxTemp >= 23 ? "반팔, 얇은 셔츠" : maxTemp >= 20 ? "얇은 가디건, 면바지" : maxTemp >= 17 ? "맨투맨, 가디건" : maxTemp >= 12 ? "자켓, 야상" : "코트, 자켓";
                 document.getElementById('outfit-list').innerHTML = `<div class="outfit-row"><i class="fas fa-tshirt" style="font-size:24px;"></i> <div><b>최고 ${maxTemp}°C</b><br>${outfitMsg}</div></div>`;
 
                 const popItems = items.filter(i => i.category === 'POP').slice(0, 10);
@@ -168,6 +169,8 @@
                     },
                     options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100 } } }
                 });
+            } else {
+                document.getElementById('outfit-list').innerHTML = `<div>날씨 데이터를 불러오지 못했습니다.</div>`;
             }
 
             document.getElementById('loading-screen').style.display = 'none';
