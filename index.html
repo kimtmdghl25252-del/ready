@@ -12,7 +12,7 @@
         #initial-screen { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 30px; padding: 40px; }
         .large-btn { width: 100%; height: 120px; background-color: var(--card-bg); border: 2px solid #333; border-radius: 25px; color: var(--text-main); font-size: 22px; font-weight: bold; display: flex; justify-content: center; align-items: center; gap: 15px; cursor: pointer; }
         #loading-screen { display: none; flex: 1; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; color: var(--text-sub); }
-        #result-screen { display: none; padding: 20px; flex-direction: column; gap: 20px; }
+        #result-screen { display: none; padding: 20px; flex-direction: column; gap: 20px; padding-bottom: 40px; }
         .card { background-color: var(--card-bg); border-radius: 20px; padding: 20px; border: 1px solid #2a2a2a; }
         #safety-time { font-size: 40px; font-weight: 900; color: var(--accent-blue); margin: 10px 0; }
         .outfit-row { display: flex; align-items: center; gap: 15px; padding: 15px; background: #2a2a2a; border-radius: 15px; margin-bottom: 10px; }
@@ -32,27 +32,26 @@
 
     <div id="result-screen">
         <div class="card" style="border: 2px solid var(--accent-blue);">
-            <div>⏰ 최종 출발 시각</div>
+            <div style="font-size: 16px;">⏰ 최종 출발 시각</div>
             <div id="safety-time">--:--</div>
-            <div id="route-detail" style="font-size:14px; color:var(--text-sub);">데이터 계산 중...</div>
+            <div id="route-detail" style="font-size:15px; color:var(--text-sub);">데이터 계산 중...</div>
         </div>
         <div id="outfit-area" class="card">
             <h2 style="font-size:18px; margin:0 0 15px 0;">🌡️ 옷차림 추천</h2>
             <div id="outfit-list"></div>
         </div>
         <div class="card">
-            <div style="font-size:16px; margin-bottom:10px;">☂️ 강수 확률</div>
+            <div style="font-size:16px; margin-bottom:10px;">☂️ 목적지 강수 확률</div>
             <div style="height:200px;"><canvas id="rainChart"></canvas></div>
         </div>
     </div>
 
     <script>
-        // 발급받으신 REST API 키를 사용합니다.
         const KAKAO_KEY = '56b6a0adbc28cab6f7c87ac9f84b14d0'; 
         const KMA_KEY = 'ddfd71d0b929827fd9c3c1851b50c301f9afb482a3143c0b39e135f9b3b8f070';
         const ODSAY_KEY = 'Rdv6LaA8z0P2BHkKrh/DsA';
 
-        const SANGIL_SUBWAY = { name: "상일동역", sx: 127.1735, sy: 37.5519, mode: 'subway' };
+        const SANGIL_SUBWAY = { name: "상일동역(5호선)", sx: 127.1735, sy: 37.5519, mode: 'subway' };
         const SANGIL_BUS = { name: "상일동역1번출구", sx: 127.1741, sy: 37.5524, mode: 'bus' };
 
         let state = { destMode: null, placeName: null, targetTime: null, targetCoords: null };
@@ -77,22 +76,31 @@
 
                 state.targetTime = parseInt(timeMatch[1]);
                 state.placeName = text.replace(timeMatch[0], "").replace(/[.,]/g, "").trim();
-                document.getElementById('loading-text').innerText = `"${state.placeName}" 찾는 중...`;
+                document.getElementById('loading-text').innerHTML = `<b>'${state.placeName}'</b> 찾는 중...`;
 
                 try {
-                    // 1. 카카오 장소 검색 (REST API 직접 호출)
-                    const kakaoRes = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(state.placeName)}`, {
+                    // [핵심] corsproxy.io 를 이용해 카카오 도메인 검사 완벽 우회
+                    const kakaoUrl = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(state.placeName)}`;
+                    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(kakaoUrl)}`;
+
+                    const kakaoRes = await fetch(proxyUrl, {
                         headers: { 'Authorization': `KakaoAK ${KAKAO_KEY}` }
                     });
+                    
                     const kakaoData = await kakaoRes.json();
 
+                    // 카카오 에러 메시지를 직접 확인하기 위한 방어 코드
+                    if (kakaoData.code === -401) {
+                        throw new Error("카카오 API 키에 문제가 있습니다.");
+                    }
                     if (!kakaoData.documents || kakaoData.documents.length === 0) {
-                        throw new Error("장소를 못 찾았습니다. 정확한 명칭을 말해주세요.");
+                        throw new Error(`'${state.placeName}'(을)를 지도에서 찾을 수 없습니다.`);
                     }
 
                     state.targetCoords = { x: kakaoData.documents[0].x, y: kakaoData.documents[0].y };
+                    document.getElementById('loading-text').innerHTML = `최적의 경로와 날씨를<br>계산하고 있습니다...`;
 
-                    // 2. 기상청 & 오디세이 데이터 병렬 호출
+                    // 2. 기상청 & 오디세이 데이터 호출
                     const [weatherRes, routeARes, routeBRes] = await Promise.all([
                         fetch(`https://apis.data.go.kr/1360000/VilageFrcstInfoService_2.0/getVilageFrcst?serviceKey=${KMA_KEY}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${new Date().toISOString().slice(0,10).replace(/-/g,"")}&base_time=0200&nx=62&ny=126`),
                         fetch(`https://api.odsay.com/v1/api/searchPubTransPathT?SX=${SANGIL_SUBWAY.sx}&SY=${SANGIL_SUBWAY.sy}&EX=${state.targetCoords.x}&EY=${state.targetCoords.y}&apiKey=${encodeURIComponent(ODSAY_KEY)}`),
@@ -112,7 +120,7 @@
             };
 
             recognition.onerror = () => {
-                alert("음성 인식 실패. 마이크 권한을 확인해주세요.");
+                alert("음성 인식 실패. 주변이 너무 시끄럽거나 마이크 권한이 없습니다.");
                 location.reload();
             };
 
@@ -120,44 +128,48 @@
         }
 
         function updateFinalUI(weather, rA, rB) {
+            // 교통 로직: 버스가 15분 이상 빠를 때만 버스 채택
             const tA = rA.result ? rA.result.path[0].info.totalTime : 999;
             const tB = rB.result ? rB.result.path[0].info.totalTime : 999;
             
             const useBus = (tA - tB >= 15);
-            const final = useBus ? { name: "버스(상일동역1번출구)", time: tB, margin: 25 } : { name: "지하철(상일동역)", time: tA, margin: 10 };
+            const final = useBus ? { name: "상일동역1번출구 (버스 정류장)", time: tB, margin: 25 } : { name: "상일동역 (지하철 탑승)", time: tA, margin: 10 };
             
             const depTime = new Date();
             depTime.setHours(state.targetTime, -(final.time + final.margin));
             
-            document.getElementById('safety-time').innerText = depTime.toTimeString().slice(0,5);
-            document.getElementById('route-detail').innerText = `${final.name} 탑승 (소요 ${final.time}분, 여유 ${final.margin}분 포함)`;
+            const hours = String(depTime.getHours()).padStart(2, '0');
+            const mins = String(depTime.getMinutes()).padStart(2, '0');
+            
+            document.getElementById('safety-time').innerText = `${hours}:${mins}`;
+            document.getElementById('route-detail').innerHTML = `<b>${final.name}</b>에서 출발하세요.<br>(소요 ${final.time}분 + 여유 ${final.margin}분 포함)`;
 
+            // 날씨 로직
             const items = weather.response.body.items.item;
             const tmpItems = items.filter(i => i.category === 'TMP');
             const maxTemp = Math.max(...tmpItems.map(i => parseInt(i.fcstValue)));
             
-            let outfitMsg = maxTemp >= 23 ? "반팔, 얇은 셔츠" : maxTemp >= 20 ? "긴팔, 면바지" : maxTemp >= 17 ? "맨투맨, 가디건" : "자켓, 트렌치코트";
-            document.getElementById('outfit-list').innerHTML = `<div class="outfit-row"><i class="fas fa-tshirt"></i> 추천: ${outfitMsg} (최고 ${maxTemp}°)</div>`;
+            let outfitMsg = maxTemp >= 23 ? "반팔, 얇은 셔츠" : maxTemp >= 20 ? "얇은 가디건, 긴팔, 면바지" : maxTemp >= 17 ? "얇은 니트, 맨투맨, 청바지" : maxTemp >= 12 ? "자켓, 가디건, 야상" : "자켓, 트렌치코트";
+            document.getElementById('outfit-list').innerHTML = `<div class="outfit-row"><i class="fas fa-tshirt" style="font-size:24px;"></i> <div><b>최고 ${maxTemp}°C</b><br>${outfitMsg}</div></div>`;
 
+            // 강수 확률 그래프
             const popItems = items.filter(i => i.category === 'POP').slice(0, 10);
             new Chart(document.getElementById('rainChart'), {
                 type: 'line',
                 data: {
                     labels: popItems.map(i => i.fcstTime.slice(0,2) + '시'),
                     datasets: [{
-                        label: '강수확률',
+                        label: '강수확률(%)',
                         data: popItems.map(i => parseInt(i.fcstValue)),
                         borderColor: '#3e91ff',
                         backgroundColor: 'rgba(62, 145, 255, 0.2)',
+                        borderWidth: 3,
+                        pointBackgroundColor: '#fff',
                         fill: true,
-                        tension: 0.4
+                        tension: 0.3
                     }]
                 },
-                options: {
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: { y: { min: 0, max: 100, grid: { color: '#333' } }, x: { grid: { display: false } } }
-                }
+                options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100, grid: { color: '#333' } }, x: { grid: { display: false } } } }
             });
 
             document.getElementById('loading-screen').style.display = 'none';
