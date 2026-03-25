@@ -64,6 +64,7 @@
         const KMA_KEY = 'ddfd71d0b929827fd9c3c1851b50c301f9afb482a3143c0b39e135f9b3b8f070';
         const ODSAY_KEY = 'Rdv6LaA8z0P2BHkKrh/DsA';
 
+        // 출발지 고정 (상일동역 1번출구)
         const FIXED_START = { name: "상일동역 1번출구", sx: 127.1741, sy: 37.5524 };
 
         let state = { destMode: null, placeName: null, targetTime: null, walkDist: 0 };
@@ -125,7 +126,8 @@
         }
 
         async function calculateAll(dx, dy) {
-            const odUrl = `https://api.odsay.com/v1/api/searchPubTransPathT?SX=${FIXED_START.sx}&SY=${START_POINT.sy || FIXED_START.sy}&EX=${dx}&EY=${dy}&apiKey=${encodeURIComponent(ODSAY_KEY)}`;
+            // [오류 해결] START_POINT를 FIXED_START로 수정했습니다.
+            const odUrl = `https://api.odsay.com/v1/api/searchPubTransPathT?SX=${FIXED_START.sx}&SY=${FIXED_START.sy}&EX=${dx}&EY=${dy}&apiKey=${encodeURIComponent(ODSAY_KEY)}`;
             const dateStr = new Date(new Date().getTime() + 32400000).toISOString().slice(0,10).replace(/-/g,"");
             const kmaUrl = `https://corsproxy.io/?${encodeURIComponent(`https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${KMA_KEY}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${dateStr}&base_time=0200&nx=62&ny=126`)}`;
 
@@ -139,18 +141,17 @@
             showScreen('result-screen');
             
             if (!rData.result || !rData.result.path) {
-                document.getElementById('safety-time').innerText = "경로 없음";
-                document.getElementById('route-detail').innerText = "탑승 가능한 경로가 없습니다.";
+                document.getElementById('safety-time').innerText = "조회 불가";
+                document.getElementById('route-detail').innerText = "도보 5분 내 탑승 가능한 경로가 없습니다.";
                 return;
             }
 
-            // 1. 첫 도보 5분 이내 필터링
+            // 첫 도보 5분 이내 필터링
             const validPaths = rData.result.path.filter(p => {
                 const first = p.subPath[0];
                 return first.trafficType !== 3 || first.sectionTime <= 5; 
             });
 
-            // 2. 지하철 전용 vs 버스 포함 경로 분리
             const subwayPaths = validPaths.filter(p => p.pathType === 1);
             const busPaths = validPaths.filter(p => p.pathType === 2 || p.pathType === 3);
 
@@ -164,7 +165,7 @@
                     busPaths.sort((a, b) => a.info.totalTime - b.info.totalTime);
                     const fastestBus = busPaths[0];
 
-                    // [핵심] 버스가 지하철보다 15분 이상 빠를 때만 버스 선택
+                    // 버스가 지하철보다 15분 이상 빠를 때만 버스 선택
                     if (fastestSubway.info.totalTime - fastestBus.info.totalTime >= 15) {
                         best = fastestBus;
                     } else {
@@ -183,18 +184,18 @@
                 return;
             }
 
-            const hasBus = best.pathType !== 1;
-            const margin = hasBus ? 25 : 10;
+            const isBus = best.pathType !== 1;
+            const margin = isBus ? 25 : 10;
             const dep = new Date(); dep.setHours(state.targetTime, -(best.info.totalTime + margin));
             
             document.getElementById('safety-time').innerText = `${String(dep.getHours()).padStart(2,'0')}:${String(dep.getMinutes()).padStart(2,'0')}`;
             
-            let rHtml = `<b>${FIXED_START.name}</b> 출발 (이동 ${best.info.totalTime}분 + 여유 ${margin}분)`;
+            let rHtml = `<b>${FIXED_START.name}</b> 출발 추천 (이동 ${best.info.totalTime}분 + 여유 ${margin}분)`;
             rHtml += `<div class="route-step-box">` + best.subPath.filter(s => s.trafficType !== 3).map((s, i) => 
                 `<div><span class="transit-badge ${s.trafficType===1?'subway-badge':'bus-badge'}">${s.trafficType===1?s.lane[0].name:s.lane[0].busNo}</span> <b>${i===0?FIXED_START.name:s.startName}</b> 탑승 ➔ <b>${s.endName}</b> 하차</div>`
             ).join('<div class="transfer-icon">▼ 환승</div>') + `</div>`;
             
-            if(state.walkDist > 0) rHtml += `<div style="margin-top:10px; color:#ff9f43; font-weight:bold;">🚶 하차 후 도보 ${state.walkDist}분</div>`;
+            if(state.walkDist > 0) rHtml += `<div style="margin-top:10px; color:#ff9f43; font-weight:bold;">🚶 하차 후 최종지까지 도보 ${state.walkDist}분</div>`;
             document.getElementById('route-detail').innerHTML = rHtml;
 
             renderWeather(wData);
