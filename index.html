@@ -56,11 +56,11 @@
 
         let state = { destMode: null, placeName: null, targetTime: null, targetCoords: null };
 
-        // 에러를 무시하고 진행하는 안전한 fetch 함수
-        async function fetchSafe(url) {
+        // [핵심 수정] 카카오 API 키(헤더)를 받을 수 있도록 안전망 업그레이드
+        async function fetchSafe(url, options = {}) {
             try {
                 const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-                const res = await fetch(proxyUrl);
+                const res = await fetch(proxyUrl, options);
                 if (!res.ok) return null;
                 return await res.json();
             } catch (e) {
@@ -91,9 +91,9 @@
                 document.getElementById('loading-text').innerHTML = `<b>'${state.placeName}'</b> 찾는 중...`;
 
                 try {
-                    // 1. 카카오 검색 (이미 성공한 로직)
+                    // 1. 카카오 검색 (API 키 정상 전달!)
                     const kakaoUrl = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(state.placeName)}`;
-                    const kakaoData = await fetchSafe(kakaoUrl);
+                    const kakaoData = await fetchSafe(kakaoUrl, { headers: { 'Authorization': `KakaoAK ${KAKAO_KEY}` } });
 
                     if (!kakaoData || !kakaoData.documents || kakaoData.documents.length === 0) {
                         throw new Error(`'${state.placeName}'(을)를 지도에서 찾을 수 없습니다.`);
@@ -102,9 +102,10 @@
                     state.targetCoords = { x: kakaoData.documents[0].x, y: kakaoData.documents[0].y };
                     document.getElementById('loading-text').innerHTML = `최적의 경로와 날씨를<br>계산하고 있습니다...`;
 
-                    // 2. 기상청 & 오디세이 병렬 호출 (에러 방어막 적용)
+                    // 2. 기상청 & 오디세이 병렬 호출
                     const encodedOdsayKey = encodeURIComponent(ODSAY_KEY);
-                    const dateStr = new Date().toISOString().slice(0,10).replace(/-/g,"");
+                    const now = new Date();
+                    const dateStr = now.toISOString().slice(0,10).replace(/-/g,"");
                     
                     const kmaUrl = `https://apis.data.go.kr/1360000/VilageFrcstInfoService_2.0/getVilageFrcst?serviceKey=${KMA_KEY}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${dateStr}&base_time=0200&nx=62&ny=126`;
                     const odAUrl = `https://api.odsay.com/v1/api/searchPubTransPathT?SX=${SANGIL_SUBWAY.sx}&SY=${SANGIL_SUBWAY.sy}&EX=${state.targetCoords.x}&EY=${state.targetCoords.y}&apiKey=${encodedOdsayKey}`;
@@ -133,7 +134,7 @@
         }
 
         function updateFinalUI(weather, rA, rB) {
-            // 교통 로직 (데이터 없으면 기본값 세팅 방어)
+            // 교통 로직
             const tA = (rA && rA.result) ? rA.result.path[0].info.totalTime : 999;
             const tB = (rB && rB.result) ? rB.result.path[0].info.totalTime : 999;
             
@@ -154,7 +155,7 @@
                 document.getElementById('route-detail').innerHTML = `<b>${final.name}</b> 출발 추천<br>(이동 ${final.time}분 + 여유 ${final.margin}분 포함)`;
             }
 
-            // 날씨 로직 (데이터 없으면 오류 안 내고 메시지만 표시)
+            // 날씨 로직
             const items = (weather && weather.response && weather.response.body) ? weather.response.body.items.item : [];
             
             if(items.length > 0) {
