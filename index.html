@@ -76,7 +76,7 @@
                 }
 
                 state.targetTime = parseInt(timeMatch[1]);
-                state.placeName = text.replace(timeMatch[0], "").trim();
+                state.placeName = text.replace(timeMatch[0], "").replace(/[.,]/g, "").trim();
                 document.getElementById('loading-text').innerText = `"${state.placeName}" 찾는 중...`;
 
                 try {
