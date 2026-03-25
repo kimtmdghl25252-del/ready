@@ -3,120 +3,129 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 Premium v24.0</title>
+    <title>S26 Debugger v26.0</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        :root { --bg: #000; --card: #1c1c1e; --blue: #0a84ff; --green: #30d158; --red: #ff453a; --text: #fff; }
-        body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; }
-        .container { padding: 20px; max-width: 500px; margin: 0 auto; }
+        :root { --bg: #050505; --card: #1c1c1e; --blue: #0a84ff; --red: #ff453a; --green: #30d158; }
+        body { margin: 0; background: var(--bg); color: #fff; font-family: 'Cascadia Code', monospace; font-size: 14px; }
+        .container { padding: 20px; max-width: 600px; margin: 0 auto; }
         
-        .search-area { background: var(--card); border-radius: 20px; padding: 20px; border: 1px solid #2c2c2e; margin-bottom: 20px; }
-        label { display: block; font-size: 11px; color: #888; margin-bottom: 8px; font-weight: bold; }
-        input { width: 100%; background: #121212; border: 1px solid #333; border-radius: 12px; padding: 12px; color: #fff; font-size: 15px; outline: none; box-sizing: border-box; margin-bottom: 15px; }
-        
-        button { width: 100%; background: var(--blue); border: none; border-radius: 15px; padding: 15px; color: #fff; font-weight: bold; font-size: 16px; cursor: pointer; }
+        /* 디버그 터미널 스타일 */
+        #console { 
+            background: #000; border: 1px solid #333; border-radius: 10px; 
+            padding: 15px; height: 200px; overflow-y: auto; 
+            font-size: 11px; color: #0f0; margin-top: 20px; border-left: 4px solid var(--blue);
+        }
+        .log-entry { margin-bottom: 5px; border-bottom: 1px solid #111; padding-bottom: 2px; }
+        .log-error { color: var(--red); }
+        .log-success { color: var(--green); }
 
-        .main-card { background: linear-gradient(160deg, #1c1c1e, #000); border-radius: 35px; padding: 40px 20px; border: 1px solid #2c2c2e; text-align: center; display: none; margin-top: 20px; }
-        .time-val { font-size: 76px; font-weight: 900; color: var(--blue); letter-spacing: -4px; line-height: 1; margin: 15px 0; }
-        .train-tag { font-size: 16px; color: var(--green); font-weight: 800; }
-        
-        .status-msg { font-size: 12px; color: #555; text-align: center; margin-top: 10px; }
+        .input-card { background: var(--card); border-radius: 20px; padding: 20px; margin-bottom: 20px; }
+        input { width: 100%; background: #000; border: 1px solid #444; border-radius: 8px; padding: 10px; color: #fff; margin-bottom: 10px; box-sizing: border-box; }
+        button { width: 100%; padding: 15px; border-radius: 12px; border: none; background: var(--blue); color: #fff; font-weight: bold; cursor: pointer; }
+
+        .result-card { background: #111; border: 1px solid var(--blue); border-radius: 20px; padding: 25px; text-align: center; display: none; }
+        .big-time { font-size: 60px; font-weight: 900; color: var(--blue); margin: 10px 0; }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <div style="font-size: 22px; font-weight: 900; color: var(--blue); margin-bottom: 20px;">S26 Premium <span style="font-size:12px; font-weight:normal; color:#444;">v24.0</span></div>
-        
-        <div class="search-area">
-            <label>목적지역</label>
-            <input type="text" id="destination" placeholder="예: 서울역, 강남">
-            <div style="display: flex; gap: 10px;">
-                <div style="flex:1;"><label>날짜</label><input type="date" id="search-date"></div>
-                <div style="flex:1;"><label>시간</label><input type="time" id="search-time"></div>
-            </div>
-            <button onclick="startCalculation()"><i class="fas fa-microchip"></i> 데이터 엔진 가동</button>
-        </div>
+<div class="container">
+    <h3 style="color: var(--blue);"><i class="fas fa-terminal"></i> S26 SYSTEM DEBUGGER</h3>
 
-        <div id="result-ui" class="main-card">
-            <span style="font-size: 14px; color: #8e8e93; font-weight: bold;">권장 현관문 출발 시각</span>
-            <div id="door-time" class="time-val">--:--</div>
-            <span id="car-info" class="train-tag"></span>
-            <div id="path-summary" style="margin-top:20px; font-size:13px; color:#666; border-top:1px solid #222; padding-top:15px;"></div>
+    <div class="input-card">
+        <label>목적지역</label>
+        <input type="text" id="dest" value="서울역">
+        <div style="display:flex; gap:10px;">
+            <input type="date" id="date">
+            <input type="time" id="time">
         </div>
-        
-        <div id="debug-log" class="status-msg">대기 중...</div>
+        <button onclick="runDebug()">데이터 요청 강제 실행</button>
     </div>
 
-    <script>
-        // 1. 사용자님이 발급받은 실제 키 (대소문자 정확히)
-        const SEOUL_KEY = '597057594f6b696d3438526a7a564e'; 
-        const START_STATION = "상일동";
-        const MARGIN = 10;
+    <div id="result" class="result-card">
+        <div style="color:#888; font-size:12px;">계산된 출발 시간</div>
+        <div id="door-time" class="big-time">--:--</div>
+        <div id="train-info" style="color:var(--green); font-weight:bold;"></div>
+    </div>
 
-        window.onload = () => {
-            const now = new Date();
-            document.getElementById('search-date').value = now.toISOString().slice(0, 10);
-            document.getElementById('search-time').value = now.toTimeString().slice(0, 5);
-        };
+    <div id="console">
+        <div class="log-entry">> 시스템 준비 완료. 목적지를 입력하고 실행하세요.</div>
+    </div>
+</div>
 
-        async function startCalculation() {
-            const dest = document.getElementById('destination').value.trim().replace(/역$/, "");
-            const date = document.getElementById('search-date').value.replace(/-/g, "");
-            const time = document.getElementById('search-time').value.replace(/:/g, "");
-            
-            if(!dest) return alert("목적지를 입력하세요.");
-            
-            const log = document.getElementById('debug-log');
-            log.innerText = "서울시 서버에 접속 시도 중...";
+<script>
+    const KEY = '597057594f6b696d3438526a7a564e';
+    const START = "상일동";
 
-            // 2. 아까 성공했던 XML과 동일한 데이터셋의 JSON 엔드포인트
-            // 포트 8088과 subwayShortestRoute 경로를 사용합니다.
-            const url = `http://openapi.seoul.go.kr:8088/${SEOUL_KEY}/json/subwayShortestRoute/1/5/${START_STATION}/${dest}/${date}${time}/1`;
-            const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+    window.onload = () => {
+        const now = new Date();
+        document.getElementById('date').value = now.toISOString().slice(0, 10);
+        document.getElementById('time').value = now.toTimeString().slice(0, 5);
+    };
 
-            try {
-                const res = await fetch(proxy);
-                const data = await res.json();
-                
-                // 데이터 구조 파싱 (서울시 API 특유의 대소문자 주의)
-                const route = data.subwayShortestRoute;
-                
-                if(!route || route.resultCode !== "00") {
-                    log.innerText = `오류 발생: ${route ? route.resultMsg : '응답 없음'}`;
-                    return;
-                }
+    function log(msg, type = '') {
+        const con = document.getElementById('console');
+        const entry = document.createElement('div');
+        entry.className = `log-entry ${type === 'error' ? 'log-error' : (type === 'success' ? 'log-success' : '')}`;
+        entry.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        con.appendChild(entry);
+        con.scrollTop = con.scrollHeight;
+    }
 
-                log.innerText = "데이터 분석 완료. 역산 수행 중...";
-                renderResult(route, dest);
-            } catch(e) {
-                log.innerText = "통신 실패. 프록시 서버나 API 키 활성화 상태를 확인하세요.";
-                console.error(e);
+    async function runDebug() {
+        const dest = document.getElementById('dest').value.trim().replace(/역$/, "");
+        const date = document.getElementById('date').value.replace(/-/g, "");
+        const time = document.getElementById('time').value.replace(/:/g, "");
+        
+        log(`데이터 요청 시작: ${START} -> ${dest}`);
+        
+        // 1. 순수 API URL 생성
+        const apiUrl = `http://openapi.seoul.go.kr:8088/${KEY}/json/subwayShortestRoute/1/1/${START}/${dest}/${date}${time}/1`;
+        log(`원본 URL: ${apiUrl}`);
+
+        // 2. 프록시 시도 (corsproxy.io 대신 더 직접적인 codetabs 사용)
+        const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(apiUrl)}`;
+        log(`프록시 서버 접속 시도 중...`);
+
+        try {
+            const res = await fetch(proxyUrl);
+            log(`응답 코드: ${res.status} ${res.statusText}`);
+
+            const rawText = await res.text();
+            log(`데이터 수신 완료 (길이: ${rawText.length} bytes)`);
+
+            // 데이터 앞부분 100자 검사 (HTML인지 JSON인지)
+            log(`데이터 서두 분석: ${rawText.substring(0, 50).replace(/</g, "&lt;")}...`);
+
+            if (rawText.trim().startsWith("<!DOCTYPE") || rawText.trim().startsWith("<html")) {
+                log("결과 에러: JSON이 아닌 HTML(에러페이지)이 반환되었습니다.", "error");
+                log("해결책: 서울시 서버 점검 중이거나 프록시가 차단되었습니다. 5초 후 재시도하세요.", "error");
+                return;
             }
-        }
 
-        function renderResult(data, endName) {
-            // 실제 배차표상의 첫 열차 출발 시각
-            const realTrainTime = data.paths[0].trainDptreTm;
-            
-            // 수학적 역산 로직
-            // $$ T_{door} = T_{train} - 10 \text{ min} $$
-            let [h, m, s] = realTrainTime.split(':').map(Number);
-            let totalMins = (h * 60 + m) - MARGIN;
-            
-            let doorH = Math.floor(totalMins / 60);
-            let doorM = totalMins % 60;
+            const data = JSON.parse(rawText);
+            if (data.subwayShortestRoute && data.subwayShortestRoute.resultCode === "00") {
+                log("JSON 파싱 성공. 유효한 경로 데이터를 찾았습니다.", "success");
+                display(data.subwayShortestRoute);
+            } else {
+                log(`API 내부 오류: ${data.subwayShortestRoute ? data.subwayShortestRoute.resultMsg : '알 수 없는 응답'}`, "error");
+            }
 
-            document.getElementById('result-ui').style.display = 'block';
-            document.getElementById('door-time').innerText = `${String(doorH).padStart(2,'0')}:${String(doorM).padStart(2,'0')}`;
-            document.getElementById('car-info').innerText = `상일동역 ${realTrainTime} 열차 기준`;
-            
-            document.getElementById('path-summary').innerHTML = `
-                <b style="color:#fff;">상일동 ➔ ${endName}</b><br>
-                실제 소요시간: 약 ${Math.floor(data.totalreqHr / 60)}분<br>
-                환승: ${data.trsitNmtm}회 (${data.trfstnNms && data.trfstnNms.trfstnNm ? data.trfstnNms.trfstnNm.stnNm : '직통'})
-            `;
+        } catch (e) {
+            log(`치명적 오류: ${e.message}`, "error");
         }
-    </script>
+    }
+
+    function display(data) {
+        const trainTime = data.paths[0].trainDptreTm;
+        let [h, m, s] = trainTime.split(':').map(Number);
+        let doorMins = (h * 60 + m) - 10;
+        
+        document.getElementById('result').style.display = 'block';
+        document.getElementById('door-time').innerText = `${String(Math.floor(doorMins/60)).padStart(2,'0')}:${String(doorMins%60).padStart(2,'0')}`;
+        document.getElementById('train-info').innerText = `상일동역 ${trainTime} 열차 기준 (-10분)`;
+    }
+</script>
 </body>
 </html>
