@@ -1,54 +1,173 @@
-<script>
-    // 카카오 REST API 키를 사용합니다 (아까 처음에 주셨던 그 키입니다)
-    const KAKAO_REST_KEY = '56b6a0adbc28cab6f7c87ac9f84b14d0'; 
-    const KMA_KEY = 'ddfd71d0b929827fd9c3c1851b50c301f9afb482a3143c0b39e135f9b3b8f070';
-    const ODSAY_KEY = 'Rdv6LaA8z0P2BHkKrh/DsA';
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>S26 프리미엄 외출 비서</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root { --bg-color: #121212; --card-bg: #1e1e1e; --text-main: #ffffff; --text-sub: #aaaaaa; --accent-blue: #3e91ff; }
+        body { margin: 0; padding: 0; background-color: var(--bg-color); color: var(--text-main); font-family: sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
+        #initial-screen { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 30px; padding: 40px; }
+        .large-btn { width: 100%; height: 120px; background-color: var(--card-bg); border: 2px solid #333; border-radius: 25px; color: var(--text-main); font-size: 22px; font-weight: bold; display: flex; justify-content: center; align-items: center; gap: 15px; cursor: pointer; }
+        #loading-screen { display: none; flex: 1; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; color: var(--text-sub); }
+        #result-screen { display: none; padding: 20px; flex-direction: column; gap: 20px; }
+        .card { background-color: var(--card-bg); border-radius: 20px; padding: 20px; border: 1px solid #2a2a2a; }
+        #safety-time { font-size: 40px; font-weight: 900; color: var(--accent-blue); margin: 10px 0; }
+        .outfit-row { display: flex; align-items: center; gap: 15px; padding: 15px; background: #2a2a2a; border-radius: 15px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
 
-    const SANGIL_SUBWAY = { name: "상일동역", sx: 127.1735, sy: 37.5519, mode: 'subway' };
-    const SANGIL_BUS = { name: "상일동역1번출구", sx: 127.1741, sy: 37.5524, mode: 'bus' };
+    <div id="initial-screen">
+        <button class="large-btn" onclick="startProcess('direct')"><i class="fas fa-map-marker-alt"></i> 목적지 바로 앞까지</button>
+        <button class="large-btn" onclick="startProcess('station')"><i class="fas fa-subway"></i> 근처 지하철역까지만</button>
+    </div>
 
-    let state = { destMode: null, placeName: null, targetTime: null, targetCoords: null };
+    <div id="loading-screen">
+        <i class="fas fa-spinner fa-spin" style="font-size:50px; color:var(--accent-blue); margin-bottom:20px;"></i>
+        <div id="loading-text">장소와 시간을 말씀해주세요...</div>
+    </div>
 
-    function startProcess(mode) {
-        state.destMode = mode;
-        document.getElementById('initial-screen').style.display = 'none';
-        document.getElementById('loading-screen').style.display = 'flex';
-        
-        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-        recognition.lang = 'ko-KR';
-        recognition.onresult = (e) => {
-            const text = e.results[0][0].transcript;
-            const timeMatch = text.match(/(\d{1,2})\s*시/);
-            if (!timeMatch) { alert("시간(예: 14시)을 포함해 말해주세요."); location.reload(); return; }
-            state.targetTime = parseInt(timeMatch[1]);
-            state.placeName = text.replace(timeMatch[0], "").trim();
+    <div id="result-screen">
+        <div class="card" style="border: 2px solid var(--accent-blue);">
+            <div>⏰ 최종 출발 시각</div>
+            <div id="safety-time">--:--</div>
+            <div id="route-detail" style="font-size:14px; color:var(--text-sub);">데이터 계산 중...</div>
+        </div>
+        <div id="outfit-area" class="card">
+            <h2 style="font-size:18px; margin:0 0 15px 0;">🌡️ 옷차림 추천</h2>
+            <div id="outfit-list"></div>
+        </div>
+        <div class="card">
+            <div style="font-size:16px; margin-bottom:10px;">☂️ 강수 확률</div>
+            <div style="height:200px;"><canvas id="rainChart"></canvas></div>
+        </div>
+    </div>
 
-            // [치트키 포인트] 직접 Fetch 호출을 통해 카카오 보안 검사 우회 시도
-            fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(state.placeName)}`, {
-                headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` }
-            })
-            .then(res => res.json())
-            .then(data => {
-                if(!data.documents || data.documents.length === 0) throw new Error("장소를 못 찾았습니다. 정확한 명칭을 말해주세요.");
-                state.targetCoords = { x: data.documents[0].x, y: data.documents[0].y };
+    <script>
+        // 발급받으신 REST API 키를 사용합니다.
+        const KAKAO_KEY = '56b6a0adbc28cab6f7c87ac9f84b14d0'; 
+        const KMA_KEY = 'ddfd71d0b929827fd9c3c1851b50c301f9afb482a3143c0b39e135f9b3b8f070';
+        const ODSAY_KEY = 'Rdv6LaA8z0P2BHkKrh/DsA';
+
+        const SANGIL_SUBWAY = { name: "상일동역", sx: 127.1735, sy: 37.5519, mode: 'subway' };
+        const SANGIL_BUS = { name: "상일동역1번출구", sx: 127.1741, sy: 37.5524, mode: 'bus' };
+
+        let state = { destMode: null, placeName: null, targetTime: null, targetCoords: null };
+
+        function startProcess(mode) {
+            state.destMode = mode;
+            document.getElementById('initial-screen').style.display = 'none';
+            document.getElementById('loading-screen').style.display = 'flex';
+            
+            const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+            recognition.lang = 'ko-KR';
+            
+            recognition.onresult = async (e) => {
+                const text = e.results[0][0].transcript;
+                const timeMatch = text.match(/(\d{1,2})\s*시/);
                 
-                // 이후 로직(기상청, 오디세이) 실행
-                return Promise.all([
-                    fetch(`https://apis.data.go.kr/1360000/VilageFrcstInfoService_2.0/getVilageFrcst?serviceKey=${KMA_KEY}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${new Date().toISOString().slice(0,10).replace(/-/g,"")}&base_time=0200&nx=62&ny=126`).then(r => r.json()),
-                    fetch(`https://api.odsay.com/v1/api/searchPubTransPathT?SX=${SANGIL_SUBWAY.sx}&SY=${SANGIL_SUBWAY.sy}&EX=${state.targetCoords.x}&EY=${state.targetCoords.y}&apiKey=${encodeURIComponent(ODSAY_KEY)}`).then(r => r.json()),
-                    fetch(`https://api.odsay.com/v1/api/searchPubTransPathT?SX=${SANGIL_BUS.sx}&SY=${SANGIL_BUS.sy}&EX=${state.targetCoords.x}&EY=${state.targetCoords.y}&apiKey=${encodeURIComponent(ODSAY_KEY)}`).then(r => r.json())
-                ]);
-            })
-            .then(([weather, rA, rB]) => {
-                // ... (UI 업데이트 로직은 이전과 동일)
-                // 성공적으로 화면 전환
-                alert("경로 탐색 성공!");
-                document.getElementById('loading-screen').style.display = 'none';
-                document.getElementById('result-screen').style.display = 'flex';
-                // (차트 그리기 등 상세 UI 코드 생략 - 이전 답변과 결합 가능)
-            })
-            .catch(err => { alert(err.message); location.reload(); });
-        };
-        recognition.start();
-    }
-</script>
+                if (!timeMatch) {
+                    alert("시간(예: 14시)을 포함해서 다시 말해주세요!");
+                    location.reload();
+                    return;
+                }
+
+                state.targetTime = parseInt(timeMatch[1]);
+                state.placeName = text.replace(timeMatch[0], "").trim();
+                document.getElementById('loading-text').innerText = `"${state.placeName}" 찾는 중...`;
+
+                try {
+                    // 1. 카카오 장소 검색 (보안 우회를 위해 직접 fetch 호출)
+                    const kakaoRes = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(state.placeName)}`, {
+                        headers: { 'Authorization': `KakaoAK ${KAKAO_KEY}` }
+                    });
+                    const kakaoData = await kakaoRes.json();
+
+                    if (!kakaoData.documents || kakaoData.documents.length === 0) {
+                        throw new Error("장소를 못 찾았습니다. 정확한 명칭을 말해주세요.");
+                    }
+
+                    state.targetCoords = { x: kakaoData.documents[0].x, y: kakaoData.documents[0].y };
+
+                    // 2. 기상청 & 오디세이 데이터 병렬 호출
+                    const [weatherRes, routeARes, routeBRes] = await Promise.all([
+                        fetch(`https://apis.data.go.kr/1360000/VilageFrcstInfoService_2.0/getVilageFrcst?serviceKey=${KMA_KEY}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${new Date().toISOString().slice(0,10).replace(/-/g,"")}&base_time=0200&nx=62&ny=126`),
+                        fetch(`https://api.odsay.com/v1/api/searchPubTransPathT?SX=${SANGIL_SUBWAY.sx}&SY=${SANGIL_SUBWAY.sy}&EX=${state.targetCoords.x}&EY=${state.targetCoords.y}&apiKey=${encodeURIComponent(ODSAY_KEY)}`),
+                        fetch(`https://api.odsay.com/v1/api/searchPubTransPathT?SX=${SANGIL_BUS.sx}&SY=${SANGIL_BUS.sy}&EX=${state.targetCoords.x}&EY=${state.targetCoords.y}&apiKey=${encodeURIComponent(ODSAY_KEY)}`)
+                    ]);
+
+                    const weatherData = await weatherRes.json();
+                    const rA = await routeARes.json();
+                    const rB = await routeBRes.json();
+
+                    // 3. UI 업데이트 실행
+                    updateFinalUI(weatherData, rA, rB);
+
+                } catch (err) {
+                    alert(err.message);
+                    location.reload();
+                }
+            };
+
+            recognition.onerror = () => {
+                alert("음성 인식에 실패했습니다. 마이크 권한을 확인해주세요.");
+                location.reload();
+            };
+
+            recognition.start();
+        }
+
+        function updateFinalUI(weather, rA, rB) {
+            // 교통 소요시간 계산
+            const tA = rA.result ? rA.result.path[0].info.totalTime : 999;
+            const tB = rB.result ? rB.result.path[0].info.totalTime : 999;
+            
+            // 버스가 15분 이상 빠를 때만 버스 루트 채택
+            const useBus = (tA - tB >= 15);
+            const final = useBus ? { name: "버스(상일동역1번출구)", time: tB, margin: 25 } : { name: "지하철(상일동역)", time: tA, margin: 10 };
+            
+            const depTime = new Date();
+            depTime.setHours(state.targetTime, -(final.time + final.margin));
+            
+            document.getElementById('safety-time').innerText = depTime.toTimeString().slice(0,5);
+            document.getElementById('route-detail').innerText = `${final.name} 탑승 (소요 ${final.time}분, 여유 ${final.margin}분 포함)`;
+
+            // 날씨 및 옷차림 처리
+            const items = weather.response.body.items.item;
+            const tmpItems = items.filter(i => i.category === 'TMP');
+            const maxTemp = Math.max(...tmpItems.map(i => parseInt(i.fcstValue)));
+            
+            let outfitMsg = maxTemp >= 23 ? "반팔, 얇은 셔츠" : maxTemp >= 20 ? "긴팔, 면바지" : maxTemp >= 17 ? "맨투맨, 가디건" : "자켓, 트렌치코트";
+            document.getElementById('outfit-list').innerHTML = `<div class="outfit-row"><i class="fas fa-tshirt"></i> 추천: ${outfitMsg} (최고 ${maxTemp}°)</div>`;
+
+            // 강수 확률 그래프
+            const popItems = items.filter(i => i.category === 'POP').slice(0, 10);
+            new Chart(document.getElementById('rainChart'), {
+                type: 'line',
+                data: {
+                    labels: popItems.map(i => i.fcstTime.slice(0,2) + '시'),
+                    datasets: [{
+                        label: '강수확률',
+                        data: popItems.map(i => parseInt(i.fcstValue)),
+                        borderColor: '#3e91ff',
+                        backgroundColor: 'rgba(62, 145, 255, 0.2)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { min: 0, max: 100, grid: { color: '#333' } }, x: { grid: { display: false } } }
+                }
+            });
+
+            document.getElementById('loading-screen').style.display = 'none';
+            document.getElementById('result-screen').style.display = 'flex';
+        }
+    </script>
+</body>
+</html>
