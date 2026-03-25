@@ -3,23 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 외출 비서 v4.2</title>
+    <title>S26 외출 비서 v5.0</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        :root { --bg: #121212; --card: #1e1e1e; --text: #ffffff; --sub: #aaaaaa; --blue: #3e91ff; --red: #ff4d4d; }
-        body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+        :root { --bg: #121212; --card: #1e1e1e; --text: #ffffff; --sub: #aaaaaa; --blue: #3e91ff; --red: #ff4d4d; --green: #2ecc71; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; }
         .screen { display: none; flex-direction: column; min-height: 100vh; padding: 20px; box-sizing: border-box; }
         .active { display: flex; }
-        .btn-large { width: 100%; height: 100px; background: var(--card); border: 1px solid #333; border-radius: 20px; color: var(--text); font-size: 20px; font-weight: bold; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 15px; cursor: pointer; }
-        .btn-station { width: 100%; background: #252525; border: 1px solid var(--blue); border-radius: 15px; padding: 15px; color: white; margin-bottom: 10px; text-align: left; }
+        .btn-large { width: 100%; height: 100px; background: var(--card); border: 1px solid #333; border-radius: 20px; color: var(--text); font-size: 20px; font-weight: bold; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 15px; }
         .card { background: var(--card); border-radius: 25px; padding: 20px; margin-bottom: 20px; border: 1px solid #2a2a2a; }
-        #safety-time { font-size: 56px; font-weight: 900; color: var(--blue); margin: 5px 0; letter-spacing: -2px; }
-        .route-box { background: #1a1a1a; border-left: 4px solid var(--blue); padding: 18px; margin-top: 15px; font-size: 14px; line-height: 1.8; border-radius: 0 15px 15px 0; }
-        .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: bold; margin-right: 6px; }
+        .time-val { font-size: 48px; font-weight: 900; color: var(--blue); letter-spacing: -2px; }
+        .route-box { background: #1a1a1a; border-left: 4px solid var(--blue); padding: 15px; margin-top: 10px; font-size: 14px; line-height: 1.7; border-radius: 0 15px 15px 0; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: bold; margin-right: 6px; color: white; }
         .b-subway { background: var(--blue); }
         .b-bus { background: var(--red); }
-        .transfer-icon { color: #555; margin: 4px 0 4px 18px; font-size: 12px; }
+        .compare-label { font-size: 12px; color: var(--green); font-weight: bold; margin-bottom: 5px; display: block; }
     </style>
 </head>
 <body>
@@ -30,8 +29,8 @@
     </div>
 
     <div id="sc-load" class="screen" style="justify-content: center; align-items: center;">
-        <i class="fas fa-circle-notch fa-spin" style="font-size: 60px; color: var(--blue); margin-bottom: 25px;"></i>
-        <div id="load-msg" style="font-size: 18px; font-weight: bold;">최적 경로 분석 중...</div>
+        <i class="fas fa-circle-notch fa-spin" style="font-size: 50px; color: var(--blue); margin-bottom: 20px;"></i>
+        <div id="load-msg">최적 경로 비교 중...</div>
     </div>
 
     <div id="sc-select" class="screen">
@@ -40,30 +39,23 @@
     </div>
 
     <div id="sc-result" class="screen">
-        <div class="card" style="border-top: 6px solid var(--blue);">
-            <div style="font-size: 15px; color: var(--sub); font-weight: bold;">권장 출발 시각</div>
-            <div id="safety-time">--:--</div>
-            <div id="summary" style="font-size: 16px; margin: 8px 0;"></div>
-            <div id="route-steps" class="route-box"></div>
-        </div>
+        <div id="result-container"></div>
         <div class="card">
             <h3 style="margin:0 0 15px 0; font-size: 16px;">🌡️ 활동 시간 옷차림</h3>
             <div id="outfit-info"></div>
         </div>
         <div class="card">
             <h3 style="margin:0 0 15px 0; font-size: 16px;">☂️ 강수 확률</h3>
-            <div style="height: 180px;"><canvas id="chart"></canvas></div>
+            <div style="height: 150px;"><canvas id="chart"></canvas></div>
         </div>
     </div>
 
     <script>
         const KEY = { K: '56b6a0adbc28cab6f7c87ac9f84b14d0', M: 'ddfd71d0b929827fd9c3c1851b50c301f9afb482a3143c0b39e135f9b3b8f070', O: 'Rdv6LaA8z0P2BHkKrh/DsA' };
-        
         const POS = {
             BUS: { name: "상일동역 1번출구(버스)", x: 127.164253, y: 37.556658 },
             SUB: { name: "상일동역 1번출구(지하철)", x: 127.165972, y: 37.556711 }
         };
-
         let app = { mode: '', time: 0, place: '', walk: 0 };
 
         function setSc(id) {
@@ -82,24 +74,18 @@
                 if(!tm) { alert("시간을 포함해 말씀해주세요."); location.reload(); return; }
                 app.time = parseInt(tm[1]);
                 app.place = txt.replace(tm[0], "").trim();
-
                 try {
                     const kUrl = `https://corsproxy.io/?${encodeURIComponent(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${app.place}`)}`;
                     const kRes = await fetch(kUrl, { headers: { 'Authorization': `KakaoAK ${KEY.K}` } });
                     const kData = await kRes.json();
-                    if(!kData.documents.length) throw "장소 검색 실패";
                     const dx = kData.documents[0].x, dy = kData.documents[0].y;
-
                     if(app.mode === 'station') {
                         const sUrl = `https://corsproxy.io/?${encodeURIComponent(`https://dapi.kakao.com/v2/local/search/category.json?category_group_code=SW8&x=${dx}&y=${dy}&radius=1500&sort=distance`)}`;
                         const sRes = await fetch(sUrl, { headers: { 'Authorization': `KakaoAK ${KEY.K}` } });
                         const sData = await sRes.json();
                         renderStations(sData.documents, dx, dy);
-                    } else {
-                        app.walk = 0;
-                        fetchData(dx, dy);
-                    }
-                } catch(e) { alert(e); location.reload(); }
+                    } else { fetchData(dx, dy); }
+                } catch(e) { alert("검색 실패"); location.reload(); }
             };
             rec.start();
         }
@@ -109,65 +95,69 @@
             const cont = document.getElementById('station-list');
             const filtered = list.filter(s => (s.distance/67) <= 15);
             cont.innerHTML = filtered.length ? filtered.map(s => `
-                <button class="btn-station" onclick="selectSt('${s.x}','${s.y}',${Math.ceil(s.distance/67)})">
-                    <b>${s.place_name}</b><br>하차 후 도보 ${Math.ceil(s.distance/67)}분
-                </button>
-            `).join('') : `<button class="btn-station" onclick="selectSt('${dx}','${dy}',0)">목적지로 바로 안내</button>`;
+                <button class="btn-station" onclick="selectSt('${s.x}','${s.y}',${Math.ceil(s.distance/67)})"><b>${s.place_name}</b><br>하차 후 도보 ${Math.ceil(s.distance/67)}분</button>
+            `).join('') : `<button class="btn-station" onclick="selectSt('${dx}','${dy}',0)">바로 안내</button>`;
         }
 
-        function selectSt(x, y, w) {
-            app.walk = w;
-            setSc('sc-load');
-            fetchData(x, y);
-        }
+        function selectSt(x, y, w) { app.walk = w; setSc('sc-load'); fetchData(x, y); }
 
         async function fetchData(ex, ey) {
             const oUrl = `https://api.odsay.com/v1/api/searchPubTransPathT?SX=${POS.SUB.x}&SY=${POS.SUB.y}&EX=${ex}&EY=${ey}&apiKey=${encodeURIComponent(KEY.O)}`;
             const date = new Date(new Date().getTime() + 32400000).toISOString().slice(0,10).replace(/-/g,"");
             const wUrl = `https://corsproxy.io/?${encodeURIComponent(`https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${KEY.M}&pageNo=1&numOfRows=1000&dataType=JSON&base_date=${date}&base_time=0200&nx=62&ny=126`)}`;
-
             const [rRes, wRes] = await Promise.all([fetch(oUrl), fetch(wUrl)]);
             renderFinal(await rRes.json(), await wRes.json());
         }
 
         function renderFinal(r, w) {
             setSc('sc-result');
+            const container = document.getElementById('result-container');
+            container.innerHTML = "";
             
-            // [도보 1분 제한 필터링]
             const paths = r.result?.path?.filter(p => p.subPath[0].trafficType !== 3 || p.subPath[0].sectionTime <= 1) || [];
-            
-            const subways = paths.filter(p => p.pathType === 1).sort((a,b) => a.info.totalTime - b.info.totalTime);
-            const buses = paths.filter(p => p.pathType !== 1).sort((a,b) => a.info.totalTime - b.info.totalTime);
+            const subway = paths.filter(p => p.pathType === 1).sort((a,b) => a.info.totalTime - b.info.totalTime)[0];
+            const bus = paths.filter(p => p.pathType !== 1).sort((a,b) => a.info.totalTime - b.info.totalTime)[0];
 
-            let best = subways[0];
-            
-            // [업데이트] 마진 5분 적용: 버스가 지하철보다 5분 이상 빠르면 버스 선택
-            if(buses[0] && (!subways[0] || (subways[0].info.totalTime - buses[0].info.totalTime >= 5))) {
-                best = buses[0];
+            let displayList = [];
+            if (subway && bus) {
+                const diff = subway.info.totalTime - bus.info.totalTime;
+                if (diff <= 0) displayList = [subway]; // 지하철이 더 빠르거나 같음
+                else if (diff < 15) displayList = [subway, bus]; // 버스가 빠르지만 15분 미만 차이 (둘 다 표시)
+                else displayList = [bus]; // 버스가 15분 이상 빠름
+            } else {
+                if (subway) displayList.push(subway);
+                else if (bus) displayList.push(bus);
             }
 
-            if(!best) {
-                document.getElementById('safety-time').innerText = "경로 없음";
-                document.getElementById('summary').innerText = "도보 1분 내 탑승 경로가 없습니다.";
-                return;
-            }
+            if (!displayList.length) { container.innerHTML = "<div class='card'>조건에 맞는 경로가 없습니다.</div>"; return; }
 
-            // [업데이트] 수단별 여유 시간: 지하철만 타면 10분, 버스 포함되면 15분
-            const isBusInvolved = best.pathType !== 1;
-            const margin = isBusInvolved ? 15 : 10;
-            const startPoint = isBusInvolved ? POS.BUS : POS.SUB;
-            
-            const dep = new Date(); dep.setHours(app.time, -(best.info.totalTime + margin));
-            
-            document.getElementById('safety-time').innerText = `${String(dep.getHours()).padStart(2,'0')}:${String(dep.getMinutes()).padStart(2,'0')}`;
-            document.getElementById('summary').innerHTML = `<b>${startPoint.name}</b> 출발<br>소요 ${best.info.totalTime}분 (여유 ${margin}분 적용)`;
+            displayList.forEach((p, idx) => {
+                const isBus = p.pathType !== 1;
+                const margin = isBus ? 15 : 10;
+                const dep = new Date(); dep.setHours(app.time, -(p.info.totalTime + margin));
+                const startPoint = isBus ? POS.BUS : POS.SUB;
+                
+                const card = document.createElement('div');
+                card.className = 'card';
+                if(idx === 0 && displayList.length > 1) card.style.borderTop = "5px solid var(--blue)";
+                
+                let html = `<span class='compare-label'>${isBus ? '🚌 버스/복합 경로' : '🚇 지하철 전용 경로'}</span>`;
+                html += `<div class='time-val'>${String(dep.getHours()).padStart(2,'0')}:${String(dep.getMinutes()).padStart(2,'0')}</div>`;
+                html += `<div style='font-size:14px; color:var(--sub);'>${startPoint.name} 출발 (소요 ${p.info.totalTime}분)</div>`;
+                html += `<div class='route-box'>` + p.subPath.filter(s => s.trafficType !== 3).map((s, i) => `
+                    <div><span class="badge ${s.trafficType===1?'b-subway':'b-bus'}">${s.trafficType===1?s.lane[0].name:s.lane[0].busNo}</span> 
+                    <b>${i===0?startPoint.name:s.startName}</b> 탑승 ➔ <b>${s.endName}</b></div>
+                `).join('<div style="font-size:10px; margin-left:15px; color:#555;">▼ 환승</div>') + `</div>`;
+                
+                card.innerHTML = html;
+                container.appendChild(card);
+            });
 
-            document.getElementById('route-steps').innerHTML = best.subPath.filter(s => s.trafficType !== 3).map((s, i) => `
-                <div><span class="badge ${s.trafficType===1?'b-subway':'b-bus'}">${s.trafficType===1?s.lane[0].name:s.lane[0].busNo}</span> 
-                <b>${i===0?startPoint.name:s.startName}</b> 탑승 ➔ <b>${s.endName}</b> 하차</div>
-            `).join('<div class="transfer-icon">▼ 환승</div>') + (app.walk > 0 ? `<div style="margin-top:10px; color:#ff9f43; font-weight:bold;">🚶 하차 후 도보 ${app.walk}분</div>` : '');
+            // 날씨 및 차트 로직 (기존 유지)
+            renderWeather(w);
+        }
 
-            // 날씨
+        function renderWeather(w) {
             const items = w.response?.body?.items?.item || [];
             const v = items.filter(i => i.fcstTime >= String(app.time).padStart(2,'0')+"00" && i.fcstTime <= "2200");
             if(v.length) {
@@ -175,11 +165,10 @@
                 const mx = Math.max(...t);
                 const out = mx >= 23 ? "반팔" : mx >= 20 ? "얇은 긴팔" : mx >= 17 ? "맨투맨/니트" : mx >= 12 ? "자켓/가디건" : "코트";
                 document.getElementById('outfit-info').innerHTML = `최고 <b>${mx}°</b> 기준, <b>${out}</b> 추천`;
-                
                 const p = v.filter(i => i.category==='POP');
                 new Chart(document.getElementById('chart'), {
                     type: 'bar',
-                    data: { labels: p.map(i => i.fcstTime.slice(0,2)+'시'), datasets: [{ data: p.map(i => i.fcstValue), backgroundColor: p.map(i => i.fcstValue >= 40 ? '#ff4d4d' : '#3e91ff'), borderRadius: 6 }] },
+                    data: { labels: p.map(i => i.fcstTime.slice(0,2)+'시'), datasets: [{ data: p.map(i => i.fcstValue), backgroundColor: p.map(i => i.fcstValue >= 40 ? '#ff4d4d' : '#3e91ff'), borderRadius: 5 }] },
                     options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100 } } }
                 });
             }
