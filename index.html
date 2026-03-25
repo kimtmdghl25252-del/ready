@@ -3,145 +3,125 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 Premium v18.0</title>
+    <title>S26 Premium v23.0</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        :root { --bg: #000; --card: #151517; --blue: #0a84ff; --green: #30d158; --red: #ff453a; --text: #fff; }
-        body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; overflow: hidden; }
-        .container { padding: 25px; max-width: 500px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
-        .brand { font-size: 22px; font-weight: 900; color: var(--blue); letter-spacing: -1px; }
+        :root { --bg: #000; --card: #1c1c1e; --blue: #0a84ff; --green: #30d158; --text: #fff; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; }
+        .container { padding: 20px; max-width: 500px; margin: 0 auto; }
         
-        .main-card { background: linear-gradient(160deg, #1c1c1e, #000); border-radius: 35px; padding: 40px 20px; border: 1px solid #2c2c2e; margin-bottom: 25px; text-align: center; }
-        .main-label { font-size: 15px; color: #8e8e93; font-weight: 700; margin-bottom: 15px; display: block; }
-        .main-time { font-size: 82px; font-weight: 900; color: var(--blue); letter-spacing: -5px; line-height: 1; }
-        .main-info { margin-top: 20px; font-size: 16px; color: var(--green); font-weight: 800; }
+        .search-area { background: var(--card); border-radius: 20px; padding: 20px; border: 1px solid #2c2c2e; margin-bottom: 25px; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; font-size: 11px; color: #888; margin-bottom: 8px; font-weight: bold; text-transform: uppercase; }
+        input { width: 100%; background: #121212; border: 1px solid #333; border-radius: 12px; padding: 12px; color: #fff; font-size: 15px; outline: none; box-sizing: border-box; }
+        
+        .row { display: flex; gap: 10px; }
+        button { width: 100%; background: var(--blue); border: none; border-radius: 15px; padding: 15px; color: #fff; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px; }
 
-        .board { background: var(--card); border-radius: 28px; padding: 20px; border: 1px solid #222; }
-        .board-title { font-size: 12px; color: #555; margin-bottom: 20px; font-weight: 800; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; }
-        .train-item { display: flex; justify-content: space-between; align-items: center; padding: 18px 0; border-bottom: 1px solid #222; }
-        .train-item:last-child { border-bottom: none; }
-        .t-time { font-size: 22px; font-weight: 800; color: #fff; }
-        .t-dest { font-size: 13px; color: #666; margin-top: 3px; font-weight: 600; }
-        .d-val { font-size: 19px; font-weight: 800; color: var(--blue); }
-        .d-label { font-size: 10px; color: #444; font-weight: bold; text-align: right; }
-
-        .loading-box { padding: 100px 0; text-align: center; color: var(--blue); font-weight: 900; }
+        .main-card { background: linear-gradient(160deg, #1c1c1e, #000); border-radius: 35px; padding: 40px 20px; border: 1px solid #2c2c2e; text-align: center; display: none; margin-top: 20px; }
+        .time-val { font-size: 76px; font-weight: 900; color: var(--blue); letter-spacing: -4px; line-height: 1; margin: 15px 0; }
+        .info-text { font-size: 14px; color: #8e8e93; font-weight: bold; }
+        .train-tag { font-size: 16px; color: var(--green); font-weight: 800; margin-top: 10px; display: block; }
+        
+        .badge { background: #333; padding: 4px 10px; border-radius: 8px; font-size: 11px; color: #aaa; margin-bottom: 10px; display: inline-block; }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <div class="header">
-            <div class="brand">S26 Premium</div>
-            <div id="live-clock" style="font-weight: 800; color: #444;">00:00:00</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div style="font-size: 22px; font-weight: 900; color: var(--blue);">S26 Premium</div>
+            <div class="badge">OFFICIAL API SYNC</div>
+        </div>
+        
+        <div class="search-area">
+            <div class="input-group">
+                <label>목적지역</label>
+                <input type="text" id="destination" placeholder="예: 서울역, 강남, 홍대입구">
+            </div>
+            <div class="row">
+                <div class="input-group" style="flex: 1.5;">
+                    <label>날짜</label>
+                    <input type="date" id="search-date">
+                </div>
+                <div class="input-group" style="flex: 1;">
+                    <label>도착 희망</label>
+                    <input type="time" id="search-time">
+                </div>
+            </div>
+            <button onclick="startCalculation()"><i class="fas fa-satellite-dish"></i> 실배차 데이터 분석</button>
         </div>
 
-        <div id="content-area">
-            <div class="loading-box">
-                <i class="fas fa-sync fa-spin"></i><br><br>상일동역 배차 DB 강제 접속 중...
-            </div>
-        </div>
-
-        <div id="list-area" style="display:none;">
-            <div class="board">
-                <div class="board-title"><i class="fas fa-subway"></i> 실시간 공식 시간표 (마진 10분)</div>
-                <div id="train-list"></div>
-            </div>
+        <div id="result-ui" class="main-card">
+            <span class="info-text">현관문을 나서야 할 시각</span>
+            <div id="door-time" class="time-val">--:--</div>
+            <span id="car-info" class="train-tag">데이터 분석 중...</span>
+            <div id="path-summary" style="margin-top:20px; font-size:13px; color:#666; border-top:1px solid #222; padding-top:15px; line-height:1.6;"></div>
         </div>
     </div>
 
     <script>
-        const API_KEY = 'Rdv6LaA8z0P2BHkKrh/DsA';
-        const SANGIL_ID = "553";
+        const SEOUL_KEY = '597057594f6b696d3438526a7a564e'; 
+        const START_STATION = "상일동";
         const MARGIN = 10;
 
-        async function fetchLive() {
+        window.onload = () => {
             const now = new Date();
-            // 2026-03-26 기준 요일 체크 (1:평일, 2:토요일, 3:일요일/공휴일)
-            const dayTag = now.getDay() === 0 ? 3 : (now.getDay() === 6 ? 2 : 1);
+            document.getElementById('search-date').value = now.toISOString().slice(0, 10);
+            document.getElementById('search-time').value = now.toTimeString().slice(0, 5);
+        };
+
+        async function startCalculation() {
+            let endStation = document.getElementById('destination').value.trim().replace(/역$/, "");
+            const inputDate = document.getElementById('search-date').value.replace(/-/g, "");
+            const inputTime = document.getElementById('search-time').value.replace(/:/g, "");
             
-            // [CORS 돌파] 가장 안정적인 corsproxy.io 직접 호출 방식
-            const target = `https://api.odsay.com/v1/api/subwayTimeTable?stationID=${SANGIL_ID}&dayTag=${dayTag}&apiKey=${encodeURIComponent(API_KEY)}`;
-            const proxy = `https://corsproxy.io/?${encodeURIComponent(target)}`;
+            if(!endStation) return alert("목적지를 입력하세요.");
+            
+            const searchDateTime = inputDate + inputTime;
+
+            // 서울시 최단경로 API 호출
+            const url = `http://swopenAPI.seoul.go.kr/api/subway/${SEOUL_KEY}/json/shortestRoute/0/1/${START_STATION}/${endStation}/${searchDateTime}/1`;
+            const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
 
             try {
                 const res = await fetch(proxy);
-                if (!res.ok) throw new Error("네트워크 응답 불안정");
                 const data = await res.json();
                 
-                if (!data.result) throw new Error("API 데이터 없음");
+                if(!data.shortestRouteList || data.shortestRouteList.length === 0) {
+                    alert("경로를 찾을 수 없습니다. 역 이름을 다시 확인하세요.");
+                    return;
+                }
 
-                // 상/하행 데이터 통합 후 시간순 정렬
-                const all = [
-                    ...(data.result.OrdList.up.list || []),
-                    ...(data.result.OrdList.down.list || [])
-                ].map(t => {
-                    const [h, m] = t.departureTime.split(':').map(Number);
-                    return { ...t, mins: h * 60 + m };
-                }).sort((a,b) => a.mins - b.mins);
-
-                render(all, now);
-            } catch (e) {
-                document.getElementById('content-area').innerHTML = `
-                    <div class="main-card" style="border-color: var(--red);">
-                        <div class="main-label" style="color: var(--red);">데이터 통신 실패</div>
-                        <div style="font-size: 14px; color: #888;">${e.message}<br>잠시 후 다시 시도하세요.</div>
-                    </div>
-                `;
+                renderResult(data.shortestRouteList[0], endStation);
+            } catch(e) {
+                alert("서울시 API 서버 응답 오류. 잠시 후 다시 시도하세요.");
             }
         }
 
-        function render(list, now) {
-            const nowMins = now.getHours() * 60 + now.getMinutes();
-            // 현재 시각 이후의 열차만 필터링
-            const upcoming = list.filter(t => t.mins >= nowMins).slice(0, 5);
+        function renderResult(data, endName) {
+            // 실제 배차표상의 상일동역 출발 시각 (HH:mm:ss)
+            const realTrainTime = data.driveInfoList[0].trainDptreTm;
+            const travelTimeMins = Math.floor(data.shtTravelTm / 60);
 
-            if (upcoming.length > 0) {
-                const best = upcoming[0];
-                const doorMins = best.mins - MARGIN;
-                const h = Math.floor(doorMins / 60);
-                const m = doorMins % 60;
+            // 수학적 역산: 현관문 출발 시각 = 실배차 시각 - 마진
+            // $$ T_{departure} = T_{train} - 10 \text{ min} $$
+            let [h, m, s] = realTrainTime.split(':').map(Number);
+            let totalMins = (h * 60 + m) - MARGIN;
+            
+            let doorH = Math.floor(totalMins / 60);
+            let doorM = totalMins % 60;
 
-                // 메인 카드 업데이트
-                document.getElementById('content-area').innerHTML = `
-                    <div class="main-card">
-                        <span class="main-label">지금 현관문을 나서야 할 시각</span>
-                        <div class="main-time">${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}</div>
-                        <div class="main-info">실제 ${best.departureTime} 열차 기준 (-10분)</div>
-                    </div>
-                `;
-
-                // 리스트 표시
-                document.getElementById('list-area').style.display = 'block';
-                document.getElementById('train-list').innerHTML = upcoming.map(t => {
-                    const dm = t.mins - MARGIN;
-                    return `
-                        <div class="train-item">
-                            <div>
-                                <div class="t-time">${t.departureTime}</div>
-                                <div class="t-dest">${t.endStationName}행</div>
-                            </div>
-                            <div class="t-departure">
-                                <div class="d-label">권장 출발</div>
-                                <div class="d-val">${String(Math.floor(dm/60)).padStart(2,'0')}:${String(dm%60).padStart(2,'0')}</div>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-            }
+            document.getElementById('result-ui').style.display = 'block';
+            document.getElementById('door-time').innerText = `${String(doorH).padStart(2,'0')}:${String(doorM).padStart(2,'0')}`;
+            document.getElementById('car-info').innerText = `상일동역 ${realTrainTime} 열차 탑승 기준`;
+            
+            document.getElementById('path-summary').innerHTML = `
+                <b style="color:#fff;">${START_STATION} ➔ ${endName}</b><br>
+                목적지 예상 도착: ${data.driveInfoList[data.driveInfoList.length-1].trainArvlTm}<br>
+                순수 이동 시간: 약 ${travelTimeMins}분 (환승 ${data.shtTransferCnt}회)
+            `;
         }
-
-        // 시계 로직
-        setInterval(() => {
-            const d = new Date();
-            document.getElementById('live-clock').innerText = 
-                d.getHours().toString().padStart(2,'0') + ":" + 
-                d.getMinutes().toString().padStart(2,'0') + ":" + 
-                d.getSeconds().toString().padStart(2,'0');
-        }, 1000);
-
-        fetchLive();
     </script>
 </body>
 </html>
