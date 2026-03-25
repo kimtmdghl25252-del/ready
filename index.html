@@ -51,7 +51,7 @@
         const KMA_KEY = 'ddfd71d0b929827fd9c3c1851b50c301f9afb482a3143c0b39e135f9b3b8f070';
         const ODSAY_KEY = 'Rdv6LaA8z0P2BHkKrh/DsA';
 
-        const SANGIL_SUBWAY = { name: "상일동역(5호선)", sx: 127.1735, sy: 37.5519, mode: 'subway' };
+        const SANGIL_SUBWAY = { name: "상일동역", sx: 127.1735, sy: 37.5519, mode: 'subway' };
         const SANGIL_BUS = { name: "상일동역1번출구", sx: 127.1741, sy: 37.5524, mode: 'bus' };
 
         let state = { destMode: null, placeName: null, targetTime: null, targetCoords: null };
@@ -79,9 +79,9 @@
                 document.getElementById('loading-text').innerHTML = `<b>'${state.placeName}'</b> 찾는 중...`;
 
                 try {
-                    // [핵심] corsproxy.io 를 이용해 카카오 도메인 검사 완벽 우회
+                    // [핵심 해결] 한글이 두 번 암호화되지 않도록 프록시 주소 조합 방식 변경
                     const kakaoUrl = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(state.placeName)}`;
-                    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(kakaoUrl)}`;
+                    const proxyUrl = `https://corsproxy.io/?${kakaoUrl}`; // 여기서 encodeURIComponent를 뺐습니다!
 
                     const kakaoRes = await fetch(proxyUrl, {
                         headers: { 'Authorization': `KakaoAK ${KAKAO_KEY}` }
@@ -89,12 +89,12 @@
                     
                     const kakaoData = await kakaoRes.json();
 
-                    // 카카오 에러 메시지를 직접 확인하기 위한 방어 코드
-                    if (kakaoData.code === -401) {
-                        throw new Error("카카오 API 키에 문제가 있습니다.");
+                    // 에러가 나면 카카오가 보내온 원본 메시지를 그대로 띄움
+                    if (!kakaoData.documents) {
+                        throw new Error("카카오 차단 오류: " + JSON.stringify(kakaoData));
                     }
-                    if (!kakaoData.documents || kakaoData.documents.length === 0) {
-                        throw new Error(`'${state.placeName}'(을)를 지도에서 찾을 수 없습니다.`);
+                    if (kakaoData.documents.length === 0) {
+                        throw new Error(`'${state.placeName}' 결과가 0개입니다. (다시 한 번 또박또박 말씀해주세요)`);
                     }
 
                     state.targetCoords = { x: kakaoData.documents[0].x, y: kakaoData.documents[0].y };
@@ -120,7 +120,7 @@
             };
 
             recognition.onerror = () => {
-                alert("음성 인식 실패. 주변이 너무 시끄럽거나 마이크 권한이 없습니다.");
+                alert("음성 인식에 실패했습니다. 주변이 너무 시끄럽거나 권한이 없습니다.");
                 location.reload();
             };
 
@@ -128,7 +128,6 @@
         }
 
         function updateFinalUI(weather, rA, rB) {
-            // 교통 로직: 버스가 15분 이상 빠를 때만 버스 채택
             const tA = rA.result ? rA.result.path[0].info.totalTime : 999;
             const tB = rB.result ? rB.result.path[0].info.totalTime : 999;
             
@@ -144,33 +143,32 @@
             document.getElementById('safety-time').innerText = `${hours}:${mins}`;
             document.getElementById('route-detail').innerHTML = `<b>${final.name}</b>에서 출발하세요.<br>(소요 ${final.time}분 + 여유 ${final.margin}분 포함)`;
 
-            // 날씨 로직
-            const items = weather.response.body.items.item;
-            const tmpItems = items.filter(i => i.category === 'TMP');
-            const maxTemp = Math.max(...tmpItems.map(i => parseInt(i.fcstValue)));
-            
-            let outfitMsg = maxTemp >= 23 ? "반팔, 얇은 셔츠" : maxTemp >= 20 ? "얇은 가디건, 긴팔, 면바지" : maxTemp >= 17 ? "얇은 니트, 맨투맨, 청바지" : maxTemp >= 12 ? "자켓, 가디건, 야상" : "자켓, 트렌치코트";
-            document.getElementById('outfit-list').innerHTML = `<div class="outfit-row"><i class="fas fa-tshirt" style="font-size:24px;"></i> <div><b>최고 ${maxTemp}°C</b><br>${outfitMsg}</div></div>`;
+            const items = weather.response.body.items.item || [];
+            if(items.length > 0) {
+                const tmpItems = items.filter(i => i.category === 'TMP');
+                const maxTemp = Math.max(...tmpItems.map(i => parseInt(i.fcstValue)));
+                
+                let outfitMsg = maxTemp >= 23 ? "반팔, 얇은 셔츠" : maxTemp >= 20 ? "얇은 가디건, 긴팔, 면바지" : maxTemp >= 17 ? "얇은 니트, 맨투맨, 청바지" : maxTemp >= 12 ? "자켓, 가디건, 야상" : "자켓, 트렌치코트";
+                document.getElementById('outfit-list').innerHTML = `<div class="outfit-row"><i class="fas fa-tshirt" style="font-size:24px;"></i> <div><b>최고 ${maxTemp}°C</b><br>${outfitMsg}</div></div>`;
 
-            // 강수 확률 그래프
-            const popItems = items.filter(i => i.category === 'POP').slice(0, 10);
-            new Chart(document.getElementById('rainChart'), {
-                type: 'line',
-                data: {
-                    labels: popItems.map(i => i.fcstTime.slice(0,2) + '시'),
-                    datasets: [{
-                        label: '강수확률(%)',
-                        data: popItems.map(i => parseInt(i.fcstValue)),
-                        borderColor: '#3e91ff',
-                        backgroundColor: 'rgba(62, 145, 255, 0.2)',
-                        borderWidth: 3,
-                        pointBackgroundColor: '#fff',
-                        fill: true,
-                        tension: 0.3
-                    }]
-                },
-                options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100, grid: { color: '#333' } }, x: { grid: { display: false } } } }
-            });
+                const popItems = items.filter(i => i.category === 'POP').slice(0, 10);
+                new Chart(document.getElementById('rainChart'), {
+                    type: 'line',
+                    data: {
+                        labels: popItems.map(i => i.fcstTime.slice(0,2) + '시'),
+                        datasets: [{
+                            label: '강수확률(%)',
+                            data: popItems.map(i => parseInt(i.fcstValue)),
+                            borderColor: '#3e91ff',
+                            backgroundColor: 'rgba(62, 145, 255, 0.2)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.3
+                        }]
+                    },
+                    options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100 } } }
+                });
+            }
 
             document.getElementById('loading-screen').style.display = 'none';
             document.getElementById('result-screen').style.display = 'flex';
