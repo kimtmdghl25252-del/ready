@@ -3,101 +3,131 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>상일동역 리얼 전광판</title>
+    <title>S26 Premium v16.0</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        :root { --bg: #000000; --card: #151517; --blue: #0a84ff; --green: #30d158; --text: #ffffff; }
-        body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; }
+        :root { --bg: #000000; --card: #1c1c1e; --blue: #0a84ff; --green: #30d158; --red: #ff453a; --text: #ffffff; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
         
-        .widget { padding: 25px; min-height: 100vh; box-sizing: border-box; }
-        .header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 25px; }
-        .station-name { font-size: 32px; font-weight: 900; color: var(--blue); letter-spacing: -1px; }
-        .version { font-size: 10px; background: #333; padding: 2px 6px; border-radius: 5px; color: #aaa; }
+        .container { padding: 20px; max-width: 500px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        .brand { font-size: 20px; font-weight: 900; color: var(--blue); }
+        .ver { font-size: 10px; color: #555; border: 1px solid #333; padding: 2px 6px; border-radius: 4px; }
 
+        /* 메인 권장 출발 시각 카드 */
+        .main-card { background: linear-gradient(145deg, #1c1c1e, #121212); border-radius: 30px; padding: 30px; border: 1px solid #2c2c2e; margin-bottom: 20px; text-align: center; }
+        .label { font-size: 14px; color: #8e8e93; font-weight: 600; }
+        .departure-time { font-size: 72px; font-weight: 900; color: var(--blue); letter-spacing: -3px; margin: 10px 0; line-height: 1; }
+        .sub-label { font-size: 16px; color: var(--green); font-weight: bold; }
+
+        /* 실제 시간표 리스트 */
         .board { background: var(--card); border-radius: 24px; padding: 20px; border: 1px solid #222; }
-        .board-title { font-size: 14px; font-weight: bold; color: #888; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; }
-        
-        .train-list { display: flex; flex-direction: column; gap: 12px; }
-        .train-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; background: #222224; border-radius: 16px; transition: 0.2s; }
-        .train-item.now { border: 1px solid var(--green); background: #1a2e1f; }
-        .train-time { font-size: 24px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
-        .train-dest { font-size: 14px; color: #aaa; font-weight: 600; }
-        .status { font-size: 12px; font-weight: bold; padding: 4px 8px; border-radius: 6px; }
-        .s-soon { color: var(--green); background: rgba(48, 209, 88, 0.1); }
-        .s-next { color: var(--blue); background: rgba(10, 132, 255, 0.1); }
+        .board-title { font-size: 13px; color: #555; margin-bottom: 15px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+        .train-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #2c2c2e; }
+        .train-item:last-child { border-bottom: none; }
+        .train-info { display: flex; flex-direction: column; }
+        .t-time { font-size: 18px; font-weight: 800; color: #fff; }
+        .t-dest { font-size: 12px; color: #888; }
+        .t-door { font-size: 14px; font-weight: bold; color: var(--blue); }
 
-        .refresh-btn { position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px; background: var(--blue); border-radius: 30px; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 20px rgba(0,0,0,0.5); border: none; color: white; font-size: 20px; }
+        .error-msg { color: var(--red); padding: 20px; text-align: center; font-size: 14px; }
     </style>
 </head>
 <body>
 
-    <div class="widget">
+    <div class="container">
         <div class="header">
-            <div>
-                <div class="version">LIVE DATA</div>
-                <div class="station-name">상일동역 <span style="font-size: 18px; color: #555;">5호선</span></div>
+            <div class="brand">S26 Premium</div>
+            <div class="ver">v16.0 REAL-DB</div>
+        </div>
+
+        <div id="main-display">
+            <div class="main-card">
+                <div class="label">상일동역 데이터 동기화 중...</div>
             </div>
-            <div id="curr-time" style="font-weight: bold; color: #888;">00:00</div>
         </div>
 
         <div class="board">
-            <div class="board-title"><i class="fas fa-list-ul"></i> 실제 배차표 정보</div>
-            <div id="train-container" class="train-list">
-                <div style="text-align: center; color: #555; padding: 40px;">데이터를 불러오는 중...</div>
-            </div>
+            <div class="board-title"><i class="fas fa-train"></i> 상일동역 5호선 실제 배차표</div>
+            <div id="list-display"></div>
         </div>
     </div>
 
-    <button class="refresh-btn" onclick="fetchTable()"><i class="fas fa-sync-alt"></i></button>
-
     <script>
-        const API_KEY = 'Rdv6LaA8z0P2BHkKrh/DsA'; // ODsay API Key
+        const API_KEY = 'Rdv6LaA8z0P2BHkKrh/DsA';
         const SANGIL_ID = "553";
+        const MARGIN = 10; // 지하철 마진 10분
 
-        async function fetchTable() {
+        async function fetchTimetable() {
             const now = new Date();
-            document.getElementById('curr-time').innerText = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
-            
             const dayTag = now.getDay() === 0 ? 3 : (now.getDay() === 6 ? 2 : 1);
-            const url = `https://api.odsay.com/v1/api/subwayTimeTable?stationID=${SANGIL_ID}&dayTag=${dayTag}&apiKey=${encodeURIComponent(API_KEY)}`;
             
+            // CORS 프록시를 통해 데이터 로드 실패 방지
+            const targetUrl = `https://api.odsay.com/v1/api/subwayTimeTable?stationID=${SANGIL_ID}&dayTag=${dayTag}&apiKey=${encodeURIComponent(API_KEY)}`;
+            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+
             try {
-                const res = await fetch(url);
+                const res = await fetch(proxyUrl);
                 const data = await res.json();
-                render(data.result.OrdList.down.list, now); // 하행(방화방면 등) 기준 예시
+                
+                if(!data.result) throw new Error("데이터 형식이 올바르지 않습니다.");
+                
+                // 하행(방화/여의도 방면) 및 상행 시간표 통합 후 정렬
+                const combined = [
+                    ...(data.result.OrdList.up.list || []),
+                    ...(data.result.OrdList.down.list || [])
+                ].map(t => {
+                    const [h, m] = t.departureTime.split(':').map(Number);
+                    return { ...t, mins: h * 60 + m };
+                }).sort((a,b) => a.mins - b.mins);
+
+                render(combined);
             } catch(e) {
-                document.getElementById('train-container').innerHTML = "데이터 로드 실패";
+                document.getElementById('main-display').innerHTML = `<div class="error-msg">API 연결 실패: ${e.message}<br>잠시 후 다시 시도해주세요.</div>`;
             }
         }
 
-        function render(list, now) {
-            const container = document.getElementById('train-container');
+        function render(list) {
+            const now = new Date();
             const nowMins = now.getHours() * 60 + now.getMinutes();
             
-            // 현재 시각 이후의 열차 5개 추출
-            const upcoming = list
-                .map(t => {
-                    const [h, m] = t.departureTime.split(':').map(Number);
-                    return { ...t, mins: h * 60 + m };
-                })
-                .filter(t => t.mins >= nowMins)
-                .slice(0, 5);
+            // 현재 시각 이후의 가장 빠른 열차들
+            const upcoming = list.filter(t => t.mins >= nowMins).slice(0, 5);
 
-            container.innerHTML = upcoming.map((t, idx) => `
-                <div class="train-item ${idx === 0 ? 'now' : ''}">
-                    <div>
-                        <div class="train-time">${t.departureTime}</div>
-                        <div class="train-dest">${t.endStationName}행</div>
+            if(upcoming.length > 0) {
+                const best = upcoming[0];
+                const doorMins = best.mins - MARGIN;
+                const doorH = Math.floor(doorMins / 60);
+                const doorM = doorMins % 60;
+
+                // 메인 카드 업데이트
+                document.getElementById('main-display').innerHTML = `
+                    <div class="main-card">
+                        <div class="label">지금 바로 나서야 할 시간</div>
+                        <div class="departure-time">${String(doorH).padStart(2,'0')}:${String(doorM).padStart(2,'0')}</div>
+                        <div class="sub-label">${best.departureTime} 열차 탑승 기준 (-${MARGIN}분)</div>
                     </div>
-                    <div class="status ${idx === 0 ? 's-soon' : 's-next'}">
-                        ${idx === 0 ? '진입 예정' : (idx + 1) + '번째 열차'}
-                    </div>
-                </div>
-            `).join('');
+                `;
+
+                // 리스트 업데이트
+                document.getElementById('list-display').innerHTML = upcoming.map(t => {
+                    const dm = t.mins - MARGIN;
+                    return `
+                        <div class="train-item">
+                            <div class="train-info">
+                                <div class="t-time">${t.departureTime}</div>
+                                <div class="t-dest">${t.endStationName}행</div>
+                            </div>
+                            <div class="t-door">${String(Math.floor(dm/60)).padStart(2,'0')}:${String(dm%60).padStart(2,'0')} 출발</div>
+                        </div>
+                    `;
+                }).join('');
+            }
         }
 
-        fetchTable();
-        setInterval(fetchTable, 60000); // 1분마다 자동 갱신
+        fetchTimetable();
+        // 1분마다 자동 갱신
+        setInterval(fetchTimetable, 60000);
     </script>
 </body>
 </html>
