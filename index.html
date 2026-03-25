@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 Premium - Local Injector</title>
+    <title>S26 Debugger v33.0</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         :root { --bg: #000; --card: #151515; --blue: #0a84ff; --green: #30d158; --red: #ff453a; --text: #fff; }
         body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; }
         
-        .header { font-size: 24px; font-weight: 900; color: var(--blue); margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; }
-        .badge { font-size: 10px; background: #333; padding: 4px 8px; border-radius: 6px; color: #aaa; letter-spacing: 1px; }
+        .header { font-size: 24px; font-weight: 900; color: var(--blue); margin-bottom: 20px; }
+        .badge { font-size: 10px; background: #333; padding: 4px 8px; border-radius: 6px; color: #aaa; vertical-align: middle; margin-left: 10px; }
 
         .input-box { background: var(--card); border: 1px solid #333; border-radius: 20px; padding: 20px; margin-bottom: 20px; }
-        label { display: block; font-size: 12px; color: #888; margin-bottom: 10px; font-weight: bold; }
-        textarea { width: 100%; height: 150px; background: #000; border: 1px solid #444; border-radius: 12px; padding: 15px; color: #0f0; font-family: monospace; font-size: 12px; box-sizing: border-box; margin-bottom: 15px; outline: none; resize: vertical; }
+        label { display: block; font-size: 13px; color: #aaa; margin-bottom: 10px; font-weight: bold; }
+        textarea { width: 100%; height: 120px; background: #000; border: 1px solid #444; border-radius: 12px; padding: 15px; color: #0f0; font-family: monospace; font-size: 12px; box-sizing: border-box; margin-bottom: 15px; outline: none; resize: vertical; }
         
         button { width: 100%; padding: 15px; border-radius: 12px; border: none; background: var(--blue); color: #fff; font-weight: 900; font-size: 16px; cursor: pointer; transition: 0.2s; }
         button:active { transform: scale(0.98); }
@@ -23,37 +23,28 @@
         .result-card { background: linear-gradient(145deg, #1a1a1c, #000); border: 1px solid var(--blue); border-radius: 24px; padding: 30px 20px; text-align: center; display: none; margin-top: 20px; }
         .door-time { font-size: 70px; font-weight: 900; color: var(--blue); letter-spacing: -3px; line-height: 1; margin: 15px 0; }
         .train-info { font-size: 16px; color: var(--green); font-weight: bold; margin-bottom: 15px; }
-        .meta-info { font-size: 13px; color: #777; border-top: 1px solid #222; padding-top: 15px; line-height: 1.6; }
 
-        /* 디버깅 콘솔 */
-        #log { background: #050505; border: 1px solid #222; padding: 15px; height: 150px; overflow-y: auto; color: #0f0; line-height: 1.6; font-size: 11px; margin-top: 20px; border-radius: 8px; font-family: 'Cascadia Code', monospace; }
-        .log-error { color: var(--red); }
-        .log-success { color: var(--green); }
+        #log { background: #050505; border: 1px solid #222; padding: 15px; height: 180px; overflow-y: auto; color: #0f0; line-height: 1.6; font-size: 11px; margin-top: 20px; border-radius: 8px; font-family: 'Cascadia Code', monospace; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div class="header">
-        <span>S26 <span style="color:#fff;">Premium</span></span>
-        <span class="badge">LOCAL INJECTOR (DEBUG)</span>
-    </div>
+    <div class="header">S26 <span style="color:#fff;">Debugger</span><span class="badge">v33.0 XML INJECT</span></div>
 
     <div class="input-box">
-        <label>최단경로 XML 데이터 붙여넣기 (API 응답 원본)</label>
-        <textarea id="xml-input" placeholder="여기에 최단경로 조회 API 결과(XML)를 그대로 복사해서 붙여넣으세요.&#10;&#10;예: <?xml version='1.1' encoding='UTF-8'?><document>..."></textarea>
-        
-        <button onclick="calculateFromXML()"><i class="fas fa-microchip"></i> 데이터 파싱 및 역산</button>
+        <label>1. 서울 열린데이터 광장에서 뽑은 최단경로 XML 입력</label>
+        <textarea id="xml-input" placeholder="이곳에 붙여넣기 하세요."></textarea>
+        <button onclick="calculateFromXML()"><i class="fas fa-search"></i> 무결성 검사 및 역산 실행</button>
     </div>
 
     <div id="result" class="result-card">
-        <div style="font-size: 14px; color: #aaa; font-weight: bold;">추천 현관문 출발 시각</div>
+        <div style="font-size: 14px; color: #aaa; font-weight: bold;">목표 열차 탑승을 위한 현관문 출발 시각</div>
         <div id="res-door" class="door-time">--:--</div>
         <div id="res-train" class="train-info"></div>
-        <div id="res-meta" class="meta-info"></div>
     </div>
 
-    <div id="log">시스템 준비 완료. XML 데이터를 기다리는 중...</div>
+    <div id="log">시스템 준비 완료.</div>
 </div>
 
 <script>
@@ -63,6 +54,7 @@
         const logBox = document.getElementById('log');
         let color = "#0f0";
         if (type === "error") color = "var(--red)";
+        if (type === "warning") color = "#ff9f0a";
         if (type === "success") color = "var(--green)";
         
         const timeStr = new Date().toLocaleTimeString();
@@ -72,79 +64,62 @@
 
     function calculateFromXML() {
         const xmlText = document.getElementById('xml-input').value.trim();
-        document.getElementById('log').innerHTML = ""; // 로그 초기화
+        document.getElementById('log').innerHTML = ""; 
+        document.getElementById('result').style.display = 'none';
         
         if (!xmlText) {
-            printLog("오류: 입력된 데이터가 없습니다.", "error");
+            printLog("오류: 텍스트 박스가 비어있습니다.", "error");
             return;
         }
 
         printLog("데이터 분석 시작...");
 
         try {
-            // 1. XML 문자열 파싱
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(xmlText, "text/xml");
 
-            // 파싱 오류 체크
-            const parserError = xmlDoc.getElementsByTagName("parsererror");
-            if (parserError.length > 0) {
-                printLog("오류: 유효하지 않은 XML 형식입니다.", "error");
+            // 서울시 에러 코드 확인
+            const resultCode = xmlDoc.getElementsByTagName("resultCode")[0]?.textContent;
+            if (resultCode && resultCode !== "00") {
+                const msg = xmlDoc.getElementsByTagName("resultMsg")[0]?.textContent;
+                throw new Error(`서울시 서버 에러: ${msg}`);
+            }
+
+            // '시간표 포함 여부' 누락 감지 로직
+            const trainTimeNode = xmlDoc.getElementsByTagName("trainDptreTm")[0];
+            
+            if (!trainTimeNode || !trainTimeNode.textContent) {
+                printLog("❌ 치명적 오류: <trainDptreTm> 필드가 존재하지 않습니다.", "error");
+                printLog("--------------------------------------------------", "warning");
+                printLog("💡 [해결 방법]", "warning");
+                printLog("서울시 API 테스트 페이지에서 빈칸을 채우실 때,", "warning");
+                printLog("맨 아래에 있는 [시간표포함여부 (선택)] 칸에 반드시 대문자 'Y'를 입력하셔야 합니다.", "warning");
+                printLog("Y를 입력하고 다시 [출력] 버튼을 눌러서 새 XML을 가져오세요.", "warning");
+                printLog("--------------------------------------------------", "warning");
                 return;
             }
 
-            // 2. 입력된 XML이 '최단경로'인지, '실시간 도착'인지 확인
-            // 사용자님이 방금 주신 데이터는 '실시간 도착(realtimeStationArrival)' 구조입니다.
-            const isRealtime = xmlDoc.getElementsByTagName("realtimeStationArrival").length > 0;
-            const isShortestRoute = xmlDoc.getElementsByTagName("paths").length > 0 || xmlDoc.getElementsByTagName("path").length > 0;
-
-            if (isRealtime) {
-                printLog("경고: 입력된 데이터는 '실시간 도착' 데이터입니다. '최단경로' 데이터가 필요합니다.", "error");
-                printLog("이 데이터에는 'trainDptreTm(열차출발시각)' 필드가 없어 역산이 불가능합니다.", "error");
-                return;
-            }
-
-            if (!isShortestRoute) {
-                printLog("오류: 최단경로 데이터를 찾을 수 없습니다. 올바른 XML인지 확인하세요.", "error");
-                return;
-            }
-
-            printLog("최단경로 XML 구조 확인 완료.", "success");
-
-            // 3. 필요 데이터 추출 (최단경로 XML 기준)
+            const trainTime = trainTimeNode.textContent; // 예: "14:04:00"
             const dptreStn = xmlDoc.getElementsByTagName("dptreStn")[0]?.getElementsByTagName("stnNm")[0]?.textContent || "출발역";
-            const arvlStn = xmlDoc.getElementsByTagName("arvlStn")[xmlDoc.getElementsByTagName("arvlStn").length - 1]?.getElementsByTagName("stnNm")[0]?.textContent || "도착역";
-            const trainTime = xmlDoc.getElementsByTagName("trainDptreTm")[0]?.textContent;
-            const travelTime = xmlDoc.getElementsByTagName("totalreqHr")[0]?.textContent; 
-            const transferCount = xmlDoc.getElementsByTagName("trsitNmtm")[0]?.textContent || "0";
 
-            if (!trainTime) {
-                throw new Error("<trainDptreTm> 필드를 찾을 수 없습니다.");
-            }
+            printLog(`데이터 추출 성공: ${dptreStn}역 출발 시각 [${trainTime}] 확인됨.`, "success");
 
-            printLog(`데이터 추출 성공: ${dptreStn} -> ${arvlStn} (출발: ${trainTime})`, "success");
-
-            // 4. 역산 로직
+            // 수학적 역산 (마진 10분)
             let [h, m, s] = trainTime.split(':').map(Number);
             let totalMins = (h * 60 + m) - MARGIN;
             
             let doorH = Math.floor(totalMins / 60);
             let doorM = totalMins % 60;
 
-            // 5. 결과 렌더링
+            // 결과 화면 렌더링
             document.getElementById('result').style.display = 'block';
             document.getElementById('res-door').innerText = `${String(doorH).padStart(2,'0')}:${String(doorM).padStart(2,'0')}`;
-            document.getElementById('res-train').innerText = `${dptreStn}역 ${trainTime} 열차 기준 (-${MARGIN}분)`;
-            document.getElementById('res-meta').innerHTML = `
-                <b style="color:#fff;">${dptreStn} ➔ ${arvlStn}</b><br>
-                예상 소요 시간: 약 ${Math.ceil(Number(travelTime)/60)}분<br>
-                환승 횟수: ${transferCount}회
-            `;
+            document.getElementById('res-train').innerText = `실제 배차표: ${dptreStn}역 ${trainTime} 출발 (-${MARGIN}분)`;
 
-            printLog("모든 계산 및 렌더링 완료.", "success");
+            printLog("역산 완료. 결과가 화면에 출력되었습니다.", "success");
 
         } catch (e) {
-            printLog(`치명적 오류: ${e.message}`, "error");
+            printLog(`오류 발생: ${e.message}`, "error");
         }
     }
 </script>
