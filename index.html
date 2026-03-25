@@ -54,7 +54,7 @@
             <div id="outfit-list"></div>
         </div>
         <div class="card" id="rain-card">
-            <div style="font-size:16px; margin-bottom:10px; font-weight:bold;">☂️ 시간별 강수 확률 (40% 이상 빨간색)</div>
+            <div style="font-size:16px; margin-bottom:10px; font-weight:bold;">☂️ 시간별 강수 확률</div>
             <div style="height:200px;"><canvas id="rainChart"></canvas></div>
         </div>
     </div>
@@ -64,12 +64,8 @@
         const KMA_KEY = 'ddfd71d0b929827fd9c3c1851b50c301f9afb482a3143c0b39e135f9b3b8f070';
         const ODSAY_KEY = 'Rdv6LaA8z0P2BHkKrh/DsA';
 
-        // [중요] API가 실제 길찾기에 사용할 절대 출발 좌표 (25133 정류장 기준)
-        const FIXED_START = { 
-            name: "상일동역 5호선 1번출구", 
-            sx: 127.1741, 
-            sy: 37.5524 
-        };
+        // [실제 API 호출용 고정 좌표] 상일동역 1번출구 정류장(25133)
+        const FIXED_START = { name: "상일동역 1번출구", sx: 127.1741, sy: 37.5524 };
 
         let state = { destMode: null, placeName: null, targetTime: null, walkDist: 0 };
 
@@ -119,7 +115,7 @@
             const container = document.getElementById('station-list-container');
             container.innerHTML = stations.slice(0,4).map(st => {
                 const w = Math.ceil(st.distance / 67);
-                return w <= 15 ? `<button class="station-btn" onclick="selectSt('${st.x}','${st.y}',${w})"><b>${st.place_name}</b><br>도보 ${w}분</button>` : '';
+                return w <= 15 ? `<button class="station-btn" onclick="selectSt('${st.x}','${st.y}',${w})"><b>${st.place_name}</b><br>하차 후 도보 ${w}분</button>` : '';
             }).join('') || `<button class="station-btn" onclick="selectSt('${dx}','${dy}',0)">주변 역 없음 (목적지로 바로가기)</button>`;
         }
 
@@ -142,31 +138,36 @@
 
         function renderFinal(rData, wData) {
             showScreen('result-screen');
-            // [실제 API 필터링] 첫 구간 도보가 3분 이하인 경로만 탐색
-            const best = rData.result?.path?.filter(p => p.subPath[0].trafficType !== 3 || p.subPath[0].sectionTime <= 3)
-                         .sort((a,b) => a.info.totalTime - b.info.totalTime)[0];
+            
+            // [핵심 필터링] 첫 구간이 도보일 때 5분 이하인 것들만 남기고, 그 중 최단 시간 경로 선택
+            const validPaths = rData.result?.path?.filter(p => {
+                const first = p.subPath[0];
+                return first.trafficType !== 3 || first.sectionTime <= 5; 
+            }) || [];
+
+            const best = validPaths.sort((a,b) => a.info.totalTime - b.info.totalTime)[0];
 
             if (!best) {
                 document.getElementById('safety-time').innerText = "경로 없음";
-                document.getElementById('route-detail').innerText = "상일동역 1번출구에서 3분 내로 탑승 가능한 경로가 없습니다.";
+                document.getElementById('route-detail').innerText = "상일동역 1번출구에서 도보 5분 내 탑승 가능한 경로가 없습니다.";
                 return;
             }
 
-            const isBus = best.subPath.some(s => s.trafficType === 2);
-            const margin = isBus ? 25 : 10;
+            // 여유시간: 버스 포함 시 25분, 지하철만 이용 시 10분
+            const hasBus = best.subPath.some(s => s.trafficType === 2);
+            const margin = hasBus ? 25 : 10;
             const dep = new Date(); dep.setHours(state.targetTime, -(best.info.totalTime + margin));
             
             document.getElementById('safety-time').innerText = `${String(dep.getHours()).padStart(2,'0')}:${String(dep.getMinutes()).padStart(2,'0')}`;
             
-            let rHtml = `<b>${FIXED_START.name}</b> 출발<br>(이동 ${best.info.totalTime}분 + 여유 ${margin}분)`;
+            let rHtml = `<b>${FIXED_START.name}</b>에서 여정 시작<br>(총 소요 ${best.info.totalTime}분 + 여유 ${margin}분)`;
             rHtml += `<div class="route-step-box">` + best.subPath.filter(s => s.trafficType !== 3).map((s, i) => 
                 `<div><span class="transit-badge ${s.trafficType===1?'subway-badge':'bus-badge'}">${s.trafficType===1?s.lane[0].name:s.lane[0].busNo}</span> <b>${i===0?FIXED_START.name:s.startName}</b> 탑승 ➔ <b>${s.endName}</b> 하차</div>`
             ).join('<div class="transfer-icon">▼ 환승</div>') + `</div>`;
             
-            if(state.walkDist > 0) rHtml += `<div style="margin-top:10px; color:#ff9f43; font-weight:bold;">🚶 하차 후 도보 ${state.walkDist}분</div>`;
+            if(state.walkDist > 0) rHtml += `<div style="margin-top:10px; color:#ff9f43; font-weight:bold;">🚶 하차 후 최종지까지 도보 ${state.walkDist}분</div>`;
             document.getElementById('route-detail').innerHTML = rHtml;
 
-            // 날씨 처리 (상세 생략, 기존 로직 유지)
             renderWeather(wData);
         }
 
@@ -177,7 +178,7 @@
             if(v.length > 0) {
                 const t = v.filter(i => i.category==='TMP').map(i => parseInt(i.fcstValue));
                 const max = Math.max(...t), min = Math.min(...t);
-                const out = max >= 23 ? "반팔" : max >= 20 ? "가디건" : max >= 17 ? "니트" : max >= 12 ? "자켓" : "코트";
+                const out = max >= 23 ? "반팔" : max >= 20 ? "가디건" : max >= 17 ? "니트/맨투맨" : max >= 12 ? "자켓/야상" : "코트/패딩";
                 document.getElementById('outfit-list').innerHTML = `<div class="outfit-row"><i class="fas fa-thermometer-half" style="font-size:30px; color:#ff9f43;"></i> <div>최고 ${max}° / 최저 ${min}°<br>${out} 추천</div></div>`;
                 
                 const p = v.filter(i => i.category==='POP');
