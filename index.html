@@ -148,7 +148,7 @@
             const grid = dfs_xy_conv(lat, lon);
             const baseDate = new Date().toISOString().slice(0,10).replace(/-/g, '');
             // 기상청 API는 브라우저 Fetch(GET)를 공식 지원함
-            const url = `http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${CONFIG.KMA}&numOfRows=1000&pageNo=1&base_date=${baseDate}&base_time=0200&nx=${grid.nx}&ny=${grid.ny}&dataType=JSON`;
+            const url = `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${CONFIG.KMA}&numOfRows=1000&pageNo=1&base_date=${baseDate}&base_time=0200&nx=${grid.nx}&ny=${grid.ny}&dataType=JSON`;
             
             const res = await fetch(url);
             const data = await res.json();
