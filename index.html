@@ -52,7 +52,7 @@
 
 <div class="container">
     <div id="header-badge">
-        <span class="badge">vFinal</span>
+        <span class="badge">vFinal (Stable)</span>
     </div>
 
     <div class="input-box">
@@ -132,7 +132,6 @@
     function cleanStationName(name) { return name.split(' ')[0].split('(')[0].replace(/역$/, '').trim(); }
     function calcRealWalkMins(straightDistance) { return Math.ceil((straightDistance * 1.35) / 67); }
 
-    // Chart.js 온도 줌인(Zoom) 범위에만 선 그리기 (스마트 기준선)
     const tempThresholdPlugin = {
         id: 'tempThresholds',
         beforeDraw: (chart) => {
@@ -158,7 +157,6 @@
         }
     };
 
-    // Chart.js 강수 확률 40% 기준선
     const popThresholdPlugin = {
         id: 'popThreshold',
         beforeDraw: (chart) => {
@@ -181,7 +179,7 @@
         }
     };
 
-    // ★ 버그 픽스: 실제 지하철 소요 시간을 에러 없이 완벽하게 가져옴
+    // 역까지의 예상 소요 시간(subMins)을 긁어오는 함수
     async function fetchSubMins(stnName) {
         let subMins = 15; // 기본값
         try {
@@ -189,7 +187,8 @@
             const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/1/상일동/${encodeURIComponent(stnName)}/${dateStr} 12:00:00/1/%20/%20/Y`;
             const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeApi)}`);
             const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
-            // totalreqHr(X) -> shtTravelTm(O) : 태그 이름 오타 완벽 수정
+            
+            // 1분 도착 오류 수정: 올바른 태그(shtTravelTm)로 파싱
             let travelTm = xml.getElementsByTagName("shtTravelTm")[0]?.textContent;
             if (travelTm) {
                 subMins = parseInt(travelTm, 10);
@@ -198,6 +197,7 @@
         return subMins;
     }
 
+    // 엔진 시작
     async function startEngine() {
         const dest = document.getElementById('dest').value.trim();
         const targetTimeStr = document.getElementById('time').value;
@@ -216,4 +216,249 @@
             
             processKMAWeather(destY, destX, parseInt(targetTimeStr.split(':')[0]));
 
-            const sRes = await fetch(`
+            const sRes = await fetch(`https://dapi.kakao.com/v2/local/search/category.json?category_group_code=SW8&x=${destX}&y=${destY}&radius=2000&sort=distance`, { headers: { Authorization: `KakaoAK ${CONFIG.KAKAO}` }});
+            const sData = await sRes.json();
+            
+            let allStations = []; let seen = new Set();
+            sData.documents.forEach(d => {
+                let name = cleanStationName(d.place_name); 
+                if (!seen.has(name)) { seen.add(name); allStations.push({ name: name, walk: calcRealWalkMins(d.distance) }); }
+            });
+
+            const targetMins = hmToMins(targetTimeStr);
+
+            // ==========================================
+            // 모드 A: 목적지로 (도보 시간 무조건 차감)
+            // ==========================================
+            if (mode === 'A') {
+                let validOptions = [];
+                const promises = allStations.slice(0, 3).map(async (stn) => {
+                    let subMins = await fetchSubMins(stn.name);
+                    let limitMins = targetMins - stn.walk; // 모드 A: 도보시간 차감
+                    
+                    let train = await fetchRealTrainSilent(stn.name, limitMins, subMins);
+                    if(train) {
+                        validOptions.push({ stn, train, targetTimeStr, routeMode: 'A' });
+                    }
+                });
+
+                await Promise.all(promises);
+                if(validOptions.length === 0) throw new Error("경로를 연산할 수 없습니다.");
+                
+                // 늦게 출발해도 되는 순으로 정렬
+                validOptions.sort((a, b) => b.train.depM - a.train.depM);
+                renderFinalResult(validOptions[0]);
+            } 
+            // ==========================================
+            // 모드 B: 근처역으로 (도보 시간 철저히 배제)
+            // ==========================================
+            else {
+                let walk15Stations = allStations.filter(s => s.walk <= 15);
+                if(walk15Stations.length === 0) walk15Stations = allStations.slice(0, 2);
+
+                let validOptions = [];
+                const promises = walk15Stations.slice(0, 4).map(async (stn) => {
+                    let subMins = await fetchSubMins(stn.name);
+                    
+                    // ★ 모드 B 핵심: 도보 시간을 절대 빼지 않음 (목표 시간 = 하차역 도착 마지노선)
+                    let limitMins = targetMins; 
+                    
+                    let train = await fetchRealTrainSilent(stn.name, limitMins, subMins); 
+                    if(train) {
+                        validOptions.push({ stn, train, targetTimeStr, routeMode: 'B' });
+                    }
+                });
+
+                await Promise.all(promises);
+
+                if(validOptions.length === 0) throw new Error("적합한 배차표를 찾을 수 없습니다.");
+                
+                // 출발 시간이 가장 늦은 순으로 정렬
+                validOptions.sort((a, b) => b.train.depM - a.train.depM);
+                let maxD = validOptions[0].train.depM; 
+                let finalOptions = validOptions.filter(o => o.train.depM >= maxD - 15);
+
+                document.getElementById('loader').style.display = 'none';
+
+                if (finalOptions.length === 1) {
+                    renderFinalResult(finalOptions[0]);
+                } else {
+                    window.tempOptions = finalOptions;
+                    let html = '';
+                    finalOptions.forEach((opt, idx) => {
+                        html += `<button class="station-btn" onclick="selectOption(${idx})">
+                            <div style="text-align:left;">
+                                <div style="font-size:15px; margin-bottom:4px;"><i class="fas fa-subway"></i> ${opt.stn.name}역 도착 목표</div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div style="font-size:11px; color:var(--green); margin-bottom:2px;">상일동 출발</div>
+                                <div style="font-size:18px; font-weight:bold; color:var(--blue);">${minsToHm(opt.train.depM)}</div>
+                            </div>
+                        </button>`;
+                    });
+                    document.getElementById('station-list').innerHTML = html;
+                    document.getElementById('station-selector').style.display = 'block';
+                }
+            }
+        } catch(e) { 
+            document.getElementById('loader').style.display = 'none';
+            alert(e.message); 
+        }
+    }
+
+    // ★ 쓰레기 경로 배제 및 진짜 탑승 시간 역산
+    async function fetchRealTrainSilent(stnName, limitMins, subMins) {
+        const expectedDepMins = limitMins - subMins;
+        const d = new Date();
+        const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        
+        const offsets = [-30, -10];
+        let allTrains = [];
+
+        for(let off of offsets) {
+            let reqMins = expectedDepMins + off;
+            let reqTimeStr = minsToHm(reqMins) + ':00';
+            
+            // /1/5/ 로 정상 최단 경로만 필터링
+            let apiUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/5/상일동/${encodeURIComponent(stnName)}/${dateStr} ${reqTimeStr}/1/%20/%20/Y`;
+            try {
+                let res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(apiUrl)}`);
+                let xmlText = await res.text();
+                let xml = new DOMParser().parseFromString(xmlText, "text/xml");
+                
+                let paths = xml.getElementsByTagName("path");
+                for (let i = 0; i < paths.length; i++) {
+                    let arrs = paths[i].getElementsByTagName("trainArvlTm");
+                    if(arrs.length > 0) {
+                        let arr = arrs[arrs.length - 1].textContent;
+                        let arrM = hmToMins(arr);
+                        
+                        // 하차 시간 - 완벽한 소요 시간 = 진짜 출발 시간 (오류 원천 차단)
+                        let depM = arrM - subMins;
+                        let dep = minsToHm(depM);
+                        
+                        allTrains.push({ dep, arr, arrM, depM });
+                    }
+                }
+            } catch(e) {}
+        }
+
+        let bestTrain = null; 
+        let minDiff = Infinity;
+        if(allTrains.length > 0) {
+            allTrains.forEach(t => {
+                let diff = limitMins - t.arrM;
+                if(diff < -720) diff += 1440; if(diff > 720) diff -= 1440;
+                
+                // 도착 마지노선(limitMins)을 넘지 않으면서 가장 바짝 붙은 막차
+                if(diff >= 0 && diff < minDiff) { 
+                    minDiff = diff; 
+                    bestTrain = t; 
+                }
+            });
+        }
+        return bestTrain;
+    }
+
+    function selectOption(idx) {
+        const opt = window.tempOptions[idx];
+        document.getElementById('station-selector').style.display = 'none';
+        renderFinalResult(opt);
+    }
+
+    function renderFinalResult(opt) {
+        document.getElementById('loader').style.display = 'none';
+        document.getElementById('result').style.display = 'block';
+        
+        const doorMins = opt.train.depM - CONFIG.MARGIN;
+        document.getElementById('res-door').innerText = minsToHm(doorMins);
+        
+        const arrStr = opt.train.arr.substring(0, 5); 
+        
+        // 모드 분기 (모드 B는 도보시간 완전히 숨김)
+        if (opt.routeMode === 'A') {
+            const finalArrMins = opt.train.arrM + opt.stn.walk;
+            document.getElementById('res-summary').innerHTML = `
+                [하차: <span>${arrStr}</span> / 도보 <span>${opt.stn.walk}분</span> / 도착: <span>${minsToHm(finalArrMins)}</span>]
+            `;
+        } else {
+            document.getElementById('res-summary').innerHTML = `
+                [하차: <span>${arrStr}</span> / 목표: <span>${opt.targetTimeStr}</span>]
+            `;
+        }
+    }
+
+    async function processKMAWeather(lat, lon, targetH) {
+        const grid = dfs_xy_conv(lat, lon);
+        const baseDate = new Date().toISOString().slice(0,10).replace(/-/g, '');
+        const url = `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${CONFIG.KMA}&numOfRows=1000&pageNo=1&base_date=${baseDate}&base_time=0200&nx=${grid.nx}&ny=${grid.ny}&dataType=JSON`;
+        try {
+            const res = await fetch(url);
+            const data = await res.json();
+            const items = data.response.body.items.item;
+            let hourly = {};
+            items.forEach(i => { if(!hourly[i.fcstTime]) hourly[i.fcstTime]={}; hourly[i.fcstTime][i.category]=i.fcstValue; });
+            const times = Object.keys(hourly).sort().filter(t => parseInt(t.slice(0,2)) >= targetH && parseInt(t.slice(0,2)) <= 22);
+            if(times.length === 0) return;
+            
+            const temps = times.map(t => parseFloat(hourly[t].TMP));
+            const pops = times.map(t => parseInt(hourly[t].POP));
+            const labels = times.map(t=>t.slice(0,2)+'시');
+            
+            const minT = Math.round(Math.min(...temps)); 
+            const maxT = Math.round(Math.max(...temps));
+
+            const rules = [
+                { min: 28, max: 99, label: "28도 이상", text: "민소매, 반팔, 반바지" },
+                { min: 23, max: 27, label: "27도 ~ 23도", text: "반팔, 얇은 셔츠/바지" },
+                { min: 20, max: 22, label: "22도 ~ 20도", text: "긴팔 티셔츠, 얇은 가디건" },
+                { min: 17, max: 19, label: "19도 ~ 17도", text: "얇은 니트, 맨투맨, 가을 자켓" },
+                { min: 12, max: 16, label: "16도 ~ 12도", text: "자켓, 야상, 두꺼운 가디건" },
+                { min: 9, max: 11, label: "11도 ~ 9도", text: "트렌치코트, 야상, 점퍼" },
+                { min: 5, max: 8, label: "8도 ~ 5도", text: "코트, 가죽자켓, 히트텍" },
+                { min: -99, max: 4, label: "4도 이하", text: "패딩, 두꺼운 코트, 방한용품" }
+            ];
+            
+            let recommendations = [];
+            rules.forEach(r => { if (r.min <= maxT && r.max >= minT) recommendations.push(`- <span style="color:var(--orange); font-weight:bold;">${r.label}</span> : ${r.text}`); });
+
+            document.getElementById('w-temp-max').innerText = maxT;
+            document.getElementById('w-temp-min').innerText = minT;
+            document.getElementById('w-clothes').innerHTML = `${recommendations.join('<br>')}`;
+            
+            const yMinTemp = minT - 2;
+            const yMaxTemp = maxT + 2;
+
+            if(tempChart) tempChart.destroy();
+            tempChart = new Chart(document.getElementById('tempChart'), {
+                type: 'line',
+                data: { labels: labels, datasets: [{ data: temps, borderColor: '#ff9f0a', backgroundColor: 'rgba(255,159,10,0.1)', borderWidth: 2, pointBackgroundColor: '#ff9f0a', fill: true, tension: 0.4 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: yMinTemp, max: yMaxTemp, ticks: {color: '#888'}, grid: {color: '#333'} }, x: { ticks: {color: '#888'}, grid: {display: false} } } },
+                plugins: [tempThresholdPlugin]
+            });
+
+            const popPointColors = pops.map(p => p >= 40 ? '#ff453a' : '#0a84ff');
+            if(rainChart) rainChart.destroy();
+            rainChart = new Chart(document.getElementById('rainChart'), {
+                type: 'line',
+                data: { labels: labels, datasets: [{ data: pops, borderColor: '#0a84ff', backgroundColor: 'rgba(10,132,255,0.1)', borderWidth: 2, pointBackgroundColor: popPointColors, fill: true, tension: 0.4 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100, ticks: {color: '#888', stepSize: 20}, grid: {color: '#333'} }, x: { ticks: {color: '#888'}, grid: {display: false} } } },
+                plugins: [popThresholdPlugin]
+            });
+        } catch(e) {}
+    }
+
+    function dfs_xy_conv(v1, v2) {
+        const RE = 6371.00877, GRID = 5.0, SLAT1 = 30.0, SLAT2 = 60.0, OLON = 126.0, OLAT = 38.0, XO = 43, YO = 136, DEGRAD = Math.PI / 180.0;
+        const re = RE / GRID, slat1 = SLAT1 * DEGRAD, slat2 = SLAT2 * DEGRAD, olon = OLON * DEGRAD, olat = OLAT * DEGRAD;
+        let sn = Math.log(Math.cos(slat1) / Math.cos(slat2)) / Math.log(Math.tan(Math.PI * 0.25 + slat2 * 0.5) / Math.tan(Math.PI * 0.25 + slat1 * 0.5));
+        let sf = Math.pow(Math.tan(Math.PI * 0.25 + slat1 * 0.5), sn) * Math.cos(slat1) / sn;
+        let ro = re * sf / Math.pow(Math.tan(Math.PI * 0.25 + olat * 0.5), sn);
+        let ra = re * sf / Math.pow(Math.tan(Math.PI * 0.25 + v1 * DEGRAD * 0.5), sn);
+        let theta = v2 * DEGRAD - olon;
+        if (theta > Math.PI) theta -= 2.0 * Math.PI; if (theta < -Math.PI) theta += 2.0 * Math.PI;
+        return { nx: Math.floor(ra * Math.sin(theta * sn) + XO + 0.5), ny: Math.floor(ro - ra * Math.cos(theta * sn) + YO + 0.5) };
+    }
+</script>
+</body>
+</html>
