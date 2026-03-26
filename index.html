@@ -38,7 +38,6 @@
         
         .route-info { font-size: 14px; color: var(--orange); font-weight: bold; margin-bottom: 20px; word-break: keep-all; line-height: 1.4; }
         
-        /* 인라인 스타일 제거 및 클래스 분리 */
         .summary-info { font-size: 14px; color: #aaa; font-weight: bold; margin-bottom: 25px; background: #111; border: 1px solid #333; border-radius: 12px; padding: 16px; display: inline-block; line-height: 1.8; text-align: center; min-width: 70%; }
         .summary-row { margin-top: 10px; }
         .summary-highlight { color: var(--green); }
@@ -61,7 +60,7 @@
 
 <div class="container">
     <div id="header-badge">
-        <span class="badge">Master (Full Refactor)</span>
+        <span class="badge">Master (API Rollback)</span>
     </div>
 
     <div id="error-box"></div>
@@ -112,7 +111,6 @@
 <script>
 /**
  * 네임스페이스 오염 방지를 위한 IIFE (즉시 실행 함수) 패턴 적용
- * S26App 객체를 통해서만 외부와 통신
  */
 const S26App = (function() {
     const CONFIG = {
@@ -121,8 +119,8 @@ const S26App = (function() {
         KMA: 'ddfd71d0b929827fd9c3c1851b50c301f9afb482a3143c0b39e135f9b3b8f070',
         PROXY: 'https://script.google.com/macros/s/AKfycbxRODYhCj2NupEwxZm7YEigfFM_N_wg5TXUHWGtDvirC_clahAQgx7Z4bT94rJX9fZWtg/exec',
         MARGIN: 10,
-        WALK_FACTOR: 1.35,  // 매직넘버 분리
-        WALK_SPEED_MPM: 67  // 매직넘버 분리
+        WALK_FACTOR: 1.35,  
+        WALK_SPEED_MPM: 67  
     };
 
     let charts = { rain: null, temp: null };
@@ -152,13 +150,12 @@ const S26App = (function() {
     const cleanStationName = (name) => name.split(' ')[0].split('(')[0].replace(/역$/, '').trim();
     const calcRealWalkMins = (distance) => Math.ceil((distance * CONFIG.WALK_FACTOR) / CONFIG.WALK_SPEED_MPM);
 
-    // 기상청 API 동적 base_time 계산 로직 (중요 수정)
+    // 기상청 API 동적 base_time 계산 로직 
     const getDynamicKmaBaseTime = () => {
         const now = new Date();
         let h = now.getHours();
         let m = now.getMinutes();
         
-        // 기상청 발표 시간(02, 05, 08, 11, 14, 17, 20, 23) + API 제공 지연시간 반영
         const baseTimes = [23, 20, 17, 14, 11, 8, 5, 2];
         let baseDate = new Date(now);
         
@@ -166,7 +163,7 @@ const S26App = (function() {
             baseDate.setDate(baseDate.getDate() - 1);
             h = 23;
         } else {
-            if (m < 15) h -= 1; // 15분 이전이면 이전 발표시간 보장
+            if (m < 15) h -= 1; 
             h = baseTimes.find(t => t <= h) || 2;
         }
         
@@ -210,30 +207,39 @@ const S26App = (function() {
     };
 
     /* ================= Core API Logics ================= */
+    // ★ 롤백: 정상 작동하던 XML 방식의 API로 원상복구하여 에러 해결!
     const fetchSubwayTravelMins = async (stnName) => {
         let e = null; 
         let routeStr = `[경로] 상일동역 탑승 ➔ ${stnName}역 하차`;
         try {
-            const url = `http://swopenapi.seoul.go.kr/api/subway/${CONFIG.SEOUL}/json/shortestRoute/0/1/상일동/${encodeURIComponent(stnName)}`;
-            const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(url)}`);
-            const data = await res.json();
-            
-            if(data.shortestRouteList && data.shortestRouteList.length > 0) {
-                e = parseInt(data.shortestRouteList[0].shtTravelTm, 10);
-                let msg = data.shortestRouteList[0].shtTransferMsg;
-                if(msg) {
-                    let transfers = msg.split(',').map(s => s.trim().split('역에서')[0] + '역(환승)');
-                    routeStr = `[경로] 상일동역 탑승 ➔ ${transfers.join(' ➔ ')} ➔ ${stnName}역 하차`;
-                }
+            const dateStr = new Date().toISOString().slice(0,10);
+            const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/1/상일동/${encodeURIComponent(stnName)}/${dateStr} 12:00:00/1/%20/%20/Y`;
+            const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeApi)}`);
+            const xmlText = await res.text();
+            const xml = new DOMParser().parseFromString(xmlText, "text/xml");
+
+            // 순수 이동시간(e) 파싱
+            let travelTm = xml.getElementsByTagName("shtTravelTm")[0]?.textContent;
+            if (travelTm) {
+                e = parseInt(travelTm, 10);
+            }
+
+            // 환승 경로 텍스트 파싱
+            let tMsgs = xml.getElementsByTagName("shtTransferMsg");
+            if (tMsgs.length > 0 && tMsgs[0].textContent) {
+                let msg = tMsgs[0].textContent;
+                let transfers = msg.split(',').map(s => s.trim().split('역에서')[0] + '역(환승)');
+                routeStr = `[경로] 상일동역 탑승 ➔ ${transfers.join(' ➔ ')} ➔ ${stnName}역 하차`;
             }
         } catch(err) {
             console.warn(`fetchE Error for ${stnName}:`, err);
         }
+        
         if(e === null) throw new Error("지하철 소요 시간 탐색 실패");
         return { subwayTravelMins: e, routeStr };
     };
 
-    // 유저 정의 A* 타임 시프팅 스캔 로직
+    // 유저 정의 A* 타임 시프팅 스캔 로직 (무한루프 방어 코드 포함)
     const fetchOptimalTrain = async (stnName, latestArrivalAtStation, limitDepMins, subwayTravelMins, routeStr) => {
         const dateStr = new Date().toISOString().slice(0,10);
         let reqTimeStr = minsToHm(limitDepMins - 30) + ':00'; // 30분 전부터 안전 스캔
@@ -266,6 +272,29 @@ const S26App = (function() {
                         };
                     }
                 }
+            }
+            
+            // API가 정상적인 데이터를 주지 못했을 경우 유저 알고리즘(I = I - 1) 수동 발동
+            if (!bestTrain) {
+                let manualDepM = limitDepMins;
+                let manualArrM = manualDepM + subwayTravelMins;
+                let loopCount = 0;
+                
+                while (manualArrM > latestArrivalAtStation) {
+                    manualDepM -= 1;
+                    manualArrM = manualDepM + subwayTravelMins;
+                    loopCount++;
+                    // 무한루프 방어 (최대 120회)
+                    if(loopCount > 120 || manualDepM < 0) break;
+                }
+                
+                bestTrain = {
+                    depM: manualDepM,
+                    arrM: manualArrM,
+                    depText: minsToHm(manualDepM),
+                    arrText: minsToHm(manualArrM),
+                    routeStr: routeStr
+                };
             }
         } catch(err) {
             console.warn("fetchOptimalTrain Error:", err);
@@ -343,16 +372,16 @@ const S26App = (function() {
 
         const summaryHTML = opt.mode === 'A' 
             ? `<div>열차: <span class="summary-highlight">${opt.train.depText}</span> 탑승 ➔ <span class="summary-highlight">${opt.train.arrText}</span> 하차</div>
-               <div class="summary-row">출발 시각 (현관문): <span class="summary-highlight">${minsToHm(opt.doorDepartureMins)}</span></div>
-               <div class="summary-row">도착 시각 (최종목적지): <span class="summary-highlight">${minsToHm(opt.finalArrivalMins)}</span></div>
-               <div class="summary-row">도보 이동: <span class="summary-highlight">${opt.walkMins}분</span></div>`
+               <div class="summary-row">J (출발시각): <span class="summary-highlight">${minsToHm(opt.doorDepartureMins)}</span></div>
+               <div class="summary-row">K (최종 도착시각): <span class="summary-highlight">${minsToHm(opt.finalArrivalMins)}</span></div>
+               <div class="summary-row">L (도보이동): <span class="summary-highlight">${opt.walkMins}분</span></div>`
             : `<div>열차: <span class="summary-highlight">${opt.train.depText}</span> 탑승 ➔ <span class="summary-highlight">${opt.train.arrText}</span> 하차</div>
-               <div class="summary-row">출발 시각 (현관문): <span class="summary-highlight">${minsToHm(opt.doorDepartureMins)}</span></div>
-               <div class="summary-row">도착 시각 (하차역): <span class="summary-highlight">${minsToHm(opt.finalArrivalMins)}</span></div>
-               <div class="summary-row">도보 이동: <span style="color:#888;">${opt.walkMins}분</span></div>`;
+               <div class="summary-row">J (출발시각): <span class="summary-highlight">${minsToHm(opt.doorDepartureMins)}</span></div>
+               <div class="summary-row">K (역 도착시각): <span class="summary-highlight">${minsToHm(opt.finalArrivalMins)}</span></div>
+               <div class="summary-row">L (도보이동): <span style="color:#888;">${opt.walkMins}분</span></div>`;
                
         document.getElementById('res-summary').innerHTML = summaryHTML;
-        document.getElementById('result').scrollIntoView({ behavior: 'smooth' }); // 자동 스크롤 개선
+        document.getElementById('result').scrollIntoView({ behavior: 'smooth' }); 
     };
 
     /* ================= Main Controller ================= */
@@ -361,7 +390,7 @@ const S26App = (function() {
         const loader = document.getElementById('loader');
         
         hideError();
-        btnSubmit.disabled = true; // 중복 클릭 방지 개선
+        btnSubmit.disabled = true; 
         btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 연산 중...';
         
         document.getElementById('result').style.display = 'none';
@@ -375,7 +404,6 @@ const S26App = (function() {
             const mode = document.querySelector('input[name="mode"]:checked').value;
             const targetArrivalMins = hmToMins(targetTimeStr); 
 
-            // 카카오 장소 검색
             const kRes = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(dest)}`, { headers: { Authorization: `KakaoAK ${CONFIG.KAKAO}` }});
             const kData = await kRes.json();
             if(!kData.documents || kData.documents.length === 0) throw new Error(`'${dest}' 장소를 찾을 수 없습니다.`);
@@ -383,7 +411,6 @@ const S26App = (function() {
             
             processWeather(destY, destX, parseInt(targetTimeStr.split(':')[0]));
 
-            // 카카오 지하철역 검색
             const sRes = await fetch(`https://dapi.kakao.com/v2/local/search/category.json?category_group_code=SW8&x=${destX}&y=${destY}&radius=2000&sort=distance`, { headers: { Authorization: `KakaoAK ${CONFIG.KAKAO}` }});
             const sData = await sRes.json();
             if(!sData.documents || sData.documents.length === 0) throw new Error("근처에 지하철역이 존재하지 않습니다.");
@@ -401,7 +428,6 @@ const S26App = (function() {
             const walkMinsFirst = top5[0].walkMins;
             top5 = top5.filter(stn => stn.walkMins < walkMinsFirst + 15);
 
-            // 병렬 처리 적용 (속도 대폭 개선 및 에러 스킵 방어 로직)
             const ePromises = top5.map(async (stn) => {
                 try {
                     let routeInfo = await fetchSubwayTravelMins(stn.name);
@@ -411,7 +437,7 @@ const S26App = (function() {
                     return stn;
                 } catch(e) {
                     console.warn(e);
-                    return null; // 에러 발생한 역은 스킵
+                    return null; 
                 }
             });
             
@@ -466,10 +492,10 @@ const S26App = (function() {
                         html += `<button class="station-btn" onclick="S26App.selectOption(${idx})">
                             <div style="text-align:left;">
                                 <div style="font-size:15px; margin-bottom:4px;"><i class="fas fa-subway"></i> ${opt.stn.name}역 하차</div>
-                                <div style="font-size:12px; color:#aaa;">도보이동 참고: ${opt.walkMins}분</div>
+                                <div style="font-size:12px; color:#aaa;">L (도보이동): ${opt.walkMins}분</div>
                             </div>
                             <div style="text-align:right;">
-                                <div style="font-size:11px; color:var(--green); margin-bottom:2px;">출발시각 (현관문)</div>
+                                <div style="font-size:11px; color:var(--green); margin-bottom:2px;">Jn (출발시각)</div>
                                 <div style="font-size:18px; font-weight:bold; color:var(--blue);">${minsToHm(opt.doorDepartureMins)}</div>
                             </div>
                         </button>`;
@@ -481,7 +507,6 @@ const S26App = (function() {
         } catch(e) { 
             showError(`[시스템 오류] ${e.message}`);
         } finally {
-            // 에러 유무와 상관없이 loader 숨기기 및 버튼 원상복구
             loader.style.display = 'none';
             btnSubmit.disabled = false;
             btnSubmit.innerHTML = '<i class="fas fa-route"></i> 최적 경로 연산 시작';
@@ -502,7 +527,6 @@ const S26App = (function() {
         renderResult(tempOptions[idx]);
     };
 
-    // 기상청 격자 변환 유지
     function dfs_xy_conv(v1, v2) {
         const RE = 6371.00877, GRID = 5.0, SLAT1 = 30.0, SLAT2 = 60.0, OLON = 126.0, OLAT = 38.0, XO = 43, YO = 136, DEGRAD = Math.PI / 180.0;
         const re = RE / GRID, slat1 = SLAT1 * DEGRAD, slat2 = SLAT2 * DEGRAD, olon = OLON * DEGRAD, olat = OLAT * DEGRAD;
