@@ -3,34 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 Premium Final</title>
+    <title>S26 Premium Master</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --bg: #000; --card: #151515; --blue: #0a84ff; --green: #30d158; --red: #ff453a; --text: #fff; --orange: #ff9f0a; }
+        :root { --bg: #000; --card: #151515; --blue: #0a84ff; --green: #30d158; --red: #ff453a; --text: #fff; --orange: #ff9f0a; --purple: #bf5af2; }
         body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; padding: 20px; }
-        .container { max-width: 600px; margin: 0 auto; }
-        
+        .container { max-width: 600px; margin: 0 auto; padding-bottom: 50px; }
         .header { font-size: 24px; font-weight: 900; color: var(--blue); margin-bottom: 25px; display: flex; align-items: center; justify-content: space-between; }
-        .badge { font-size: 10px; background: #333; padding: 4px 8px; border-radius: 6px; color: var(--green); letter-spacing: 1px; }
-
+        .badge { font-size: 10px; background: #333; padding: 4px 8px; border-radius: 6px; color: var(--purple); letter-spacing: 1px; }
         .input-box { background: var(--card); border: 1px solid #333; border-radius: 20px; padding: 25px; margin-bottom: 20px; }
         label { display: block; font-size: 12px; color: #888; margin-bottom: 8px; font-weight: bold; }
-        input { width: 100%; background: #000; border: 1px solid #444; border-radius: 12px; padding: 15px; color: #fff; font-size: 16px; box-sizing: border-box; margin-bottom: 20px; outline: none; text-align: center; font-weight: bold; }
-        
-        .row { display: flex; gap: 15px; }
-        
-        button { width: 100%; padding: 18px; border-radius: 14px; border: none; background: var(--blue); color: #fff; font-weight: 900; font-size: 16px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 15px rgba(10, 132, 255, 0.3); }
+        input[type="text"], input[type="time"] { width: 100%; background: #000; border: 1px solid #444; border-radius: 12px; padding: 15px; color: #fff; font-size: 16px; box-sizing: border-box; margin-bottom: 20px; outline: none; font-weight: bold; }
+        .radio-group { display: flex; gap: 10px; margin-bottom: 20px; }
+        .radio-label { flex: 1; text-align: center; background: #000; border: 1px solid #444; border-radius: 12px; padding: 12px; color: #aaa; font-size: 13px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .radio-label.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+        input[type="radio"] { display: none; }
+        button { width: 100%; padding: 18px; border-radius: 14px; border: none; background: var(--blue); color: #fff; font-weight: 900; font-size: 16px; cursor: pointer; transition: 0.2s; }
         button:active { transform: scale(0.98); }
-
-        .result-card { background: linear-gradient(145deg, #1a1a1c, #000); border: 1px solid var(--blue); border-radius: 24px; padding: 35px 20px; text-align: center; display: none; margin-top: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .door-time { font-size: 85px; font-weight: 900; color: var(--blue); letter-spacing: -4px; line-height: 1; margin: 15px 0; text-shadow: 0 0 20px rgba(10, 132, 255, 0.2); }
+        #station-selector { display: none; margin-bottom: 20px; }
+        .station-btn { background: #222; border: 1px solid #444; color: #fff; padding: 15px; margin-bottom: 10px; border-radius: 12px; text-align: left; display: flex; justify-content: space-between; align-items: center; width: 100%; cursor: pointer; }
+        .result-card { background: linear-gradient(145deg, #1a1a1c, #000); border: 1px solid var(--blue); border-radius: 24px; padding: 30px 20px; text-align: center; display: none; margin-top: 20px; }
+        .door-time { font-size: 80px; font-weight: 900; color: var(--blue); letter-spacing: -4px; line-height: 1; margin: 15px 0; }
         .train-info { font-size: 16px; color: var(--green); font-weight: bold; margin-bottom: 20px; }
-        
-        .weather-box { background: rgba(255,255,255,0.05); border-radius: 12px; padding: 15px; margin-bottom: 20px; font-size: 13px; line-height: 1.5; color: #ddd; text-align: left; border: 1px solid #333; }
-        .w-title { color: var(--orange); font-weight: bold; margin-bottom: 5px; font-size: 12px; }
-        
+        .weather-box { background: rgba(255,255,255,0.05); border-radius: 16px; padding: 20px; margin-bottom: 20px; text-align: left; border: 1px solid #333; }
+        .w-header { font-size: 14px; color: var(--orange); font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        .temp-range { font-size: 18px; font-weight: bold; color: #fff; margin-bottom: 10px; }
+        .clothes-list { font-size: 13px; color: #ddd; line-height: 1.6; margin-bottom: 15px; background: #000; padding: 10px; border-radius: 8px; }
+        .chart-container { position: relative; height: 150px; width: 100%; }
         .meta-info { font-size: 13px; color: #888; border-top: 1px solid #222; padding-top: 15px; line-height: 1.6; }
-
         #log { background: #050505; border: 1px solid #222; padding: 15px; height: 180px; overflow-y: auto; color: #0f0; font-size: 11px; margin-top: 20px; border-radius: 12px; font-family: 'Cascadia Code', monospace; line-height: 1.5; }
     </style>
 </head>
@@ -39,16 +40,28 @@
 <div class="container">
     <div class="header">
         <span>S26 <span style="color:#fff;">Premium</span></span>
-        <span class="badge">vFINAL (SMART AI)</span>
+        <span class="badge">vMASTER FINAL</span>
     </div>
 
     <div class="input-box">
-        <div class="row">
-            <div style="flex: 1;"><label>목표 도착역 (출발: 상일동)</label><input type="text" id="dest" value="잠실"></div>
-            <div style="flex: 1;"><label>목표 도착 시각 (오늘)</label><input type="time" id="time" value="14:00"></div>
+        <label>계산 모드</label>
+        <div class="radio-group">
+            <label class="radio-label active" id="label-A"><input type="radio" name="mode" value="A" checked onchange="toggleMode()"> 도보 최적화</label>
+            <label class="radio-label" id="label-B"><input type="radio" name="mode" value="B" onchange="toggleMode()"> 근처 역 선택</label>
         </div>
+
+        <label>목적지</label>
+        <input type="text" id="dest" placeholder="예: 잠실역, 고덕도서관" value="잠실역">
         
-        <button onclick="runMasterEngine()"><i class="fas fa-rocket"></i> 외출 준비 시작</button>
+        <label>도착 시각 (24H)</label>
+        <input type="time" id="time" value="14:00">
+        
+        <button id="main-btn" onclick="startEngine()"><i class="fas fa-magic"></i> 분석 및 역산 시작</button>
+    </div>
+
+    <div id="station-selector">
+        <label style="color:var(--purple); font-size:14px; margin-bottom:10px;">근처 역 목록 (도보 시간 포함)</label>
+        <div id="station-list"></div>
     </div>
 
     <div id="result" class="result-card">
@@ -57,33 +70,46 @@
         <div id="res-train" class="train-info"></div>
         
         <div id="res-weather" class="weather-box">
-            </div>
+            <div class="w-header"><i class="fas fa-cloud-sun"></i> 날씨 & 코디 스펙트럼</div>
+            <div id="w-temp" class="temp-range"></div>
+            <div id="w-clothes" class="clothes-list"></div>
+            <div class="w-header" style="margin-top:20px; font-size:12px; color:var(--blue); border:none;"><i class="fas fa-umbrella"></i> 시간별 강수 확률 그래프</div>
+            <div class="chart-container"><canvas id="rainChart"></canvas></div>
+        </div>
 
         <div id="res-meta" class="meta-info"></div>
     </div>
 
-    <div id="log">대기 중... 사용자님의 구글 프록시 연동 완료. 당일 상일동 출발 고정.</div>
+    <div id="log">시스템 준비 완료. 상일동 출발 / 오늘 기준.</div>
 </div>
 
 <script>
-    // 사용자님이 만들어주신 최종 구글 무적 프록시
+    const KAKAO_KEY = '56b6a0adbc28cab6f7c87ac9f84b14d0';
     const GOOGLE_PROXY = 'https://script.google.com/macros/s/AKfycbxywKA4LXgeBV3FIovlrYIFHIA645jQjQAhPjxzJ-OQ_wusqxZHeqnUNbw0PGswcKssNA/exec';
-    const KEY = '597057594f6b696d3438526a7a564e';
-    const START_STATION = '상일동'; // 출발역 고정
+    const SEOUL_KEY = '597057594f6b696d3438526a7a564e';
+    const START_STN = '상일동';
     const MARGIN = 10;
+
+    let rainChart = null;
 
     function printLog(msg, color = "#0f0") {
         const logBox = document.getElementById('log');
-        const timeStr = new Date().toLocaleTimeString();
-        logBox.innerHTML += `<div style="color:${color}; margin-bottom:4px;">[${timeStr}] ${msg}</div>`;
+        logBox.innerHTML += `<div style="color:${color}; margin-bottom:4px;">> ${msg}</div>`;
         logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function toggleMode() {
+        const mode = document.querySelector('input[name="mode"]:checked').value;
+        document.getElementById('label-A').classList.toggle('active', mode === 'A');
+        document.getElementById('label-B').classList.toggle('active', mode === 'B');
+        document.getElementById('station-selector').style.display = 'none';
+        document.getElementById('result').style.display = 'none';
     }
 
     function hmToMins(timeStr) {
         let [h, m] = timeStr.split(':').map(Number);
         return h * 60 + m;
     }
-    
     function minsToHm(mins) {
         let m = Math.round(mins);
         while(m < 0) m += 24 * 60;
@@ -91,176 +117,130 @@
         return `${String(Math.floor(m / 60)).padStart(2,'0')}:${String(m % 60).padStart(2,'0')}`;
     }
 
-    // [기능 추가] 날씨 및 옷차림 분석 AI
-    async function getWeatherAndClothing(targetHour) {
-        try {
-            printLog("날씨 API 호출 중... (상일동 기준)");
-            // Open-Meteo API (서울 강동구 상일동 좌표 기준, 무료, CORS 제한 없음)
-            const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=37.55&longitude=127.17&hourly=temperature_2m,precipitation_probability&timezone=Asia%2FSeoul`;
-            const res = await fetch(weatherUrl);
-            const data = await res.json();
-
-            // 오늘 날짜의 해당 시간(목표 도착 시간) 데이터 인덱스 찾기
-            const now = new Date();
-            const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}T${String(targetHour).padStart(2,'0')}:00`;
-            
-            const timeIndex = data.hourly.time.indexOf(todayStr);
-            if (timeIndex === -1) return null;
-
-            const temp = Math.round(data.hourly.temperature_2m[timeIndex]);
-            const pop = data.hourly.precipitation_probability[timeIndex];
-
-            // 온도별 옷차림 로직
-            let clothes = "";
-            if (temp >= 28) clothes = "민소매, 얇은 반팔, 반바지";
-            else if (temp >= 23) clothes = "반팔, 얇은 셔츠, 얇은 긴바지";
-            else if (temp >= 20) clothes = "긴팔 티셔츠, 가디건, 면바지";
-            else if (temp >= 17) clothes = "니트, 맨투맨, 가을 자켓, 청바지";
-            else if (temp >= 12) clothes = "자켓, 가디건, 야상, 기모바지";
-            else if (temp >= 9) clothes = "트렌치코트, 점퍼, 니트";
-            else if (temp >= 5) clothes = "코트, 가죽자켓, 히트텍";
-            else clothes = "패딩, 두꺼운 코트, 목도리, 방한용품";
-
-            // 강수량 로직
-            let rainText = pop >= 40 ? `<br><span style="color:var(--blue); font-weight:bold;">☂️ 비 올 확률 ${pop}% (우산 필수!)</span>` : `<br><span style="color:#aaa;">우산은 안 챙기셔도 됩니다. (강수확률 ${pop}%)</span>`;
-
-            return {
-                html: `<div class="w-title">외출 시간(${targetHour}시) 날씨 정보</div>
-                       기온: <b>${temp}°C</b> ➔ <b>${clothes}</b> 추천${rainText}`
-            };
-        } catch(e) {
-            printLog("날씨 데이터를 불러오지 못했습니다.", "#ff9f0a");
-            return null;
-        }
+    async function getStations(place) {
+        const url = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(place)}`;
+        const res = await fetch(url, { headers: { Authorization: `KakaoAK ${KAKAO_KEY}` }});
+        const data = await res.json();
+        if (!data.documents[0]) throw new Error("장소를 찾을 수 없습니다.");
+        
+        const { x, y } = data.documents[0];
+        const catUrl = `https://dapi.kakao.com/v2/local/search/category.json?category_group_code=SW8&x=${x}&y=${y}&radius=2000&sort=distance`;
+        const res2 = await fetch(catUrl, { headers: { Authorization: `KakaoAK ${KAKAO_KEY}` }});
+        const data2 = await res2.json();
+        
+        let stations = [];
+        let seen = new Set();
+        data2.documents.forEach(d => {
+            let name = d.place_name.replace(/역$/, '').split(' ')[0];
+            if (!seen.has(name)) {
+                seen.add(name);
+                stations.push({ name, walk: Math.ceil(d.distance / 80) });
+            }
+        });
+        const minWalk = stations[0].walk;
+        return stations.filter(s => s.walk <= minWalk + 15);
     }
 
-    async function runMasterEngine() {
-        const dest = document.getElementById('dest').value.trim();
-        const timeStr = document.getElementById('time').value; 
-        
-        if (!dest) return alert("도착역을 입력하세요.");
+    const clothesRules = [
+        { min: 28, max: 99, text: "민소매, 반팔, 반바지" },
+        { min: 23, max: 27, text: "반팔, 얇은 긴바지" },
+        { min: 20, max: 22, text: "긴팔 티셔츠, 가디건, 면바지" },
+        { min: 17, max: 19, text: "니트, 맨투맨, 청바지" },
+        { min: 12, max: 16, text: "자켓, 가디건, 기모바지" },
+        { min: 9, max: 11, text: "트렌치코트, 점퍼" },
+        { min: 5, max: 8, text: "코트, 가죽자켓, 히트텍" },
+        { min: -99, max: 4, text: "패딩, 목도리" }
+    ];
 
-        document.getElementById('result').style.display = 'none';
-        document.getElementById('log').innerHTML = "";
-        
-        // 날짜는 무조건 오늘로 고정
+    async function showWeather(hour) {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=37.55&longitude=127.17&hourly=temperature_2m,precipitation_probability&timezone=Asia%2FSeoul`;
+        const res = await fetch(url);
+        const data = await res.json();
         const d = new Date();
-        const dateStr = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-        const formattedDateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const prefix = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T`;
+        let startIdx = data.hourly.time.indexOf(`${prefix}${String(hour).padStart(2,'0')}:00`);
+        let endIdx = data.hourly.time.indexOf(`${prefix}22:00`);
+        if (startIdx === -1) return;
+        if (endIdx === -1) endIdx = startIdx + 3;
 
-        printLog(`[마스터 엔진 가동] 오늘(${formattedDateStr}) ${timeStr} 도착 목표`);
+        const temps = data.hourly.temperature_2m.slice(startIdx, endIdx + 1);
+        const pops = data.hourly.precipitation_probability.slice(startIdx, endIdx + 1);
+        const labels = data.hourly.time.slice(startIdx, endIdx + 1).map(t => t.slice(11,13)+'시');
 
-        try {
-            let [tH, tM] = timeStr.split(':').map(Number);
-            let targetMins = hmToMins(timeStr);
-            
-            // 1단계: 날씨 정보 동시 호출
-            const weatherPromise = getWeatherAndClothing(tH);
+        const minT = Math.round(Math.min(...temps));
+        const maxT = Math.round(Math.max(...temps));
+        let clothes = clothesRules.filter(r => r.min <= maxT && r.max >= minT).map(r => `<li>${r.text}</li>`).join('');
 
-            // 2단계: 순수 이동 시간 정찰
-            const dummyDate = `${formattedDateStr} 12:00:00`; 
-            const probeUrl = `http://openapi.seoul.go.kr:8088/${KEY}/xml/getShtrmPath/1/1/${START_STATION}/${dest}/${encodeURIComponent(dummyDate)}/1/%20/%20/Y`;
-            
-            printLog("1. 이동 시간 파악 중...");
-            const probeRes = await fetch(`${GOOGLE_PROXY}?url=${encodeURIComponent(probeUrl)}`);
-            const probeXml = new DOMParser().parseFromString(await probeRes.text(), "text/xml");
-            
-            if (probeXml.getElementsByTagName("CODE")[0]?.textContent === "ERROR-500") {
-                throw new Error("서울시 서버가 해당 경로의 환승 계산을 거부했습니다. 잠시 후 다시 시도하세요.");
-            }
-            if (probeXml.getElementsByTagName("resultCode")[0]?.textContent !== "00") {
-                throw new Error("경로를 찾을 수 없습니다. 역 이름을 정확히 입력하세요.");
-            }
-            
-            const travelMins = Math.ceil(Number(probeXml.getElementsByTagName("totalreqHr")[0]?.textContent) / 60);
-            printLog(`> 순수 이동 시간: 약 ${travelMins}분`);
+        document.getElementById('w-temp').innerText = `${minT}°C ~ ${maxT}°C`;
+        document.getElementById('w-clothes').innerHTML = `<ul style="margin:0; padding-left:20px;">${clothes}</ul>`;
 
-            // 3단계: 마지노선 계산 (목표 시간 - 소요 시간)
-            let limitDepMins = targetMins - travelMins;
-            let limitTimeStr = minsToHm(limitDepMins);
-            printLog(`2. 마지노선 탑승 시각: [${limitTimeStr}]`);
+        if(rainChart) rainChart.destroy();
+        rainChart = new Chart(document.getElementById('rainChart'), {
+            type: 'line',
+            data: { labels, datasets: [{ data: pops, borderColor: '#0a84ff', backgroundColor: 'rgba(10,132,255,0.1)', fill: true, pointBackgroundColor: pops.map(p => p >= 40 ? '#ff453a' : '#0a84ff') }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100, ticks: { color: '#888' } }, x: { ticks: { color: '#888' } } } }
+        });
+    }
 
-            // 4단계: 다중 스캔 (에러 자동 우회)
-            const offsets = [-30, -20, -10, -5, -1];
-            const fetchPromises = offsets.map(offset => {
-                let reqMins = limitDepMins + offset;
-                let reqTimeStr = `${minsToHm(reqMins)}:00`;
-                let reqUrl = `http://openapi.seoul.go.kr:8088/${KEY}/xml/getShtrmPath/1/1/${START_STATION}/${dest}/${encodeURIComponent(`${formattedDateStr} ${reqTimeStr}`)}/1/%20/%20/Y`;
-                
-                return fetch(`${GOOGLE_PROXY}?url=${encodeURIComponent(reqUrl)}`)
-                    .then(r => r.text())
-                    .catch(e => null); // 에러 방어
-            });
-
-            printLog("3. 서울시 서버 다중 스캔 중 (환승 렉 방어 모드)...");
-            const results = await Promise.all(fetchPromises);
-            let trainMap = new Map(); 
-
-            results.forEach(xmlText => {
-                if (!xmlText) return; 
-                let xmlDoc = new DOMParser().parseFromString(xmlText, "text/xml");
-                if (xmlDoc.getElementsByTagName("CODE")[0]?.textContent === "ERROR-500") return;
-
-                let paths = xmlDoc.getElementsByTagName("path");
-                
+    async function calculate(stn, targetMins, walk) {
+        const d = new Date();
+        const date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const limitMins = targetMins - walk;
+        
+        // 다중 스캔
+        const offsets = [-30, -15, -1];
+        let allTrains = [];
+        for (let off of offsets) {
+            let reqTime = minsToHm(limitMins + off) + ':00';
+            let url = `http://openapi.seoul.go.kr:8088/${SEOUL_KEY}/xml/getShtrmPath/1/1/${START_STN}/${stn}/${encodeURIComponent(date + ' ' + reqTime)}/1/%20/%20/Y`;
+            try {
+                let res = await fetch(`${GOOGLE_PROXY}?url=${encodeURIComponent(url)}`);
+                let xml = new DOMParser().parseFromString(await res.text(), "text/xml");
+                let paths = xml.getElementsByTagName("path");
                 if (paths.length > 0) {
-                    let dep = paths[0].getElementsByTagName("trainDptreTm")[0]?.textContent;
-                    let arr = paths[paths.length - 1].getElementsByTagName("trainArvlTm")[0]?.textContent;
-                    
-                    if (dep && arr) trainMap.set(dep, { dep, arr, depMins: hmToMins(dep) });
+                    let dep = paths[0].getElementsByTagName("trainDptreTm")[0].textContent;
+                    let arr = paths[paths.length - 1].getElementsByTagName("trainArvlTm")[0].textContent;
+                    allTrains.push({ dep, arr, depM: hmToMins(dep) });
                 }
-            });
-
-            let allTrains = Array.from(trainMap.values());
-            if (allTrains.length === 0) throw new Error("서버 에러로 데이터를 가져오지 못했습니다. 다시 버튼을 눌러주세요.");
-
-            // 5단계: 최후의 열차 탐색
-            let bestTrain = null;
-            let minDiff = Infinity; 
-
-            allTrains.forEach(t => {
-                let diff = limitDepMins - t.depMins;
-                if (diff < -12 * 60) diff += 24 * 60;
-                if (diff > 12 * 60) diff -= 24 * 60;
-
-                if (diff >= 0 && diff < minDiff) {
-                    minDiff = diff;
-                    bestTrain = t;
-                }
-            });
-
-            if (!bestTrain) {
-                throw new Error(`[${limitTimeStr}] 이전에 출발하는 열차를 찾지 못했습니다.`);
-            }
-
-            printLog(`✅ 스캔 성공! 생존한 데이터 중 최적 열차: [${bestTrain.dep}]`);
-
-            // 6단계: 날씨 정보 적용 및 렌더링
-            let doorTimeStr = minsToHm(bestTrain.depMins - MARGIN);
-            
-            const weatherData = await weatherPromise;
-            const weatherBox = document.getElementById('res-weather');
-            if(weatherData) {
-                weatherBox.innerHTML = weatherData.html;
-                weatherBox.style.display = 'block';
-            } else {
-                weatherBox.style.display = 'none';
-            }
-
-            document.getElementById('result').style.display = 'block';
-            document.getElementById('res-door').innerText = doorTimeStr;
-            document.getElementById('res-train').innerText = `상일동역 ${bestTrain.dep} 출발 열차 기준 (-${MARGIN}분 마진)`;
-            document.getElementById('res-meta').innerHTML = `
-                <b style="color:#fff;">상일동 ➔ ${dest}</b><br>
-                마지노선 시각: ${limitTimeStr} (이동: ${travelMins}분)<br>
-                최종 도착 예정: <span style="color:var(--green)">${bestTrain.arr}</span>
-            `;
-            
-            printLog("모든 계산 및 날씨 바인딩 완료. 좋은 하루 되세요!", "#30d158");
-
-        } catch (e) {
-            printLog(`❌ 에러: ${e.message}`, "#ff453a");
+            } catch(e) {}
         }
+
+        let best = null, minDiff = Infinity;
+        allTrains.forEach(t => {
+            let diff = limitMins - t.depM;
+            if (diff >= 0 && diff < minDiff) { minDiff = diff; best = t; }
+        });
+        if (!best) throw new Error("열차를 찾을 수 없습니다.");
+        
+        document.getElementById('result').style.display = 'block';
+        document.getElementById('res-door').innerText = minsToHm(best.depM - MARGIN);
+        document.getElementById('res-train').innerText = `${START_STN}역 ${best.dep} 출발 기준`;
+        document.getElementById('res-meta').innerHTML = `마지노선: ${minsToHm(limitMins)} (도보 ${walk}분 제외)<br>도착역(${stn}) 예정: ${best.arr}`;
+    }
+
+    async function startEngine() {
+        try {
+            const dest = document.getElementById('dest').value;
+            const time = document.getElementById('time').value;
+            const mode = document.querySelector('input[name="mode"]:checked').value;
+            printLog("스캔 시작...");
+            
+            const stations = await getStations(dest);
+            showWeather(parseInt(time.split(':')[0]));
+
+            if (mode === 'B') {
+                let html = '';
+                stations.forEach(s => {
+                    html += `<button class="station-btn" onclick="calculate('${s.name}', ${hmToMins(time)}, ${s.walk})">
+                        <span>${s.name}역</span><span>도보 ${s.walk}분</span></button>`;
+                });
+                document.getElementById('station-list').innerHTML = html;
+                document.getElementById('station-selector').style.display = 'block';
+            } else {
+                // 모드 A 최적화 (단순화: 가장 도보 짧은 역 기준)
+                calculate(stations[0].name, hmToMins(time), stations[0].walk);
+            }
+        } catch(e) { printLog(e.message, "#ff453a"); }
     }
 </script>
 </body>
