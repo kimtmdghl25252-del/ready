@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 Premium v47.0</title>
+    <title>S26 Premium v48.0</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -42,7 +42,7 @@
 <div class="container">
     <div class="header">
         <span>S26 <span style="color:#fff;">Premium</span></span>
-        <span class="badge">v47.0</span>
+        <span class="badge">v48.0</span>
     </div>
 
     <div class="input-box">
@@ -53,10 +53,10 @@
         </div>
 
         <label>최종 목적지 (출발: 상일동 고정)</label>
-        <input type="text" id="dest" value="롯데월드 어드벤처">
+        <input type="text" id="dest" value="천호보건지소">
         
         <label>목표 도착 시각 (24H)</label>
-        <input type="time" id="time" value="14:00">
+        <input type="time" id="time" value="22:02">
         
         <button onclick="startEngine()"><i class="fas fa-subway"></i> 배차 스캔 시작</button>
     </div>
@@ -83,7 +83,7 @@
         <div id="res-meta" style="font-size: 13px; color: #888; border-top: 1px solid #222; padding-top: 15px; line-height: 1.6;"></div>
     </div>
 
-    <div id="log">시스템 대기 중. (v47.0)</div>
+    <div id="log">시스템 대기 중. (v48.0)</div>
 </div>
 
 <script>
@@ -147,7 +147,7 @@
             
             processKMAWeather(destY, destX, parseInt(targetTime.split(':')[0]));
 
-            printLog("2. 주변 지하철역 스캔 및 도보 시간 확보...");
+            printLog("2. 주변 지하철역 스캔 및 이동 시간 정밀 연산...");
             const sRes = await fetch(`https://dapi.kakao.com/v2/local/search/category.json?category_group_code=SW8&x=${destX}&y=${destY}&radius=2000&sort=distance`, {
                 headers: { Authorization: `KakaoAK ${CONFIG.KAKAO}` }
             });
@@ -163,51 +163,54 @@
                 }
             });
 
+            // 상위 5개 역으로 제한하여 정밀 소요시간 연산 (모드 B에서도 정확한 스캔 윈도우를 잡기 위함)
+            stations = stations.slice(0, 5);
+            for(let i=0; i<stations.length; i++) {
+                let stn = stations[i];
+                stn.subMins = 30; // 실패 시 기본값
+                try {
+                    const d = new Date();
+                    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                    const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/100/상일동/${stn.name}/${dateStr} 12:00:00/1/%20/%20/Y`;
+                    const probeRes = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeApi)}`);
+                    const xml = new DOMParser().parseFromString(await probeRes.text(), "text/xml");
+                    
+                    if (xml.getElementsByTagName("resultCode")[0]?.textContent === "00") {
+                        stn.subMins = Math.ceil(Number(xml.getElementsByTagName("totalreqHr")[0]?.textContent) / 60);
+                    }
+                } catch(e) {}
+            }
+
             const targetMins = hmToMins(targetTime);
 
             if (mode === 'A') {
-                printLog(`[모드 A] 상위 3개 역의 최적경로를 연산합니다...`);
+                printLog(`[모드 A] 최적 경로 연산...`);
                 let bestRoute = null;
                 let minTotalMins = Infinity;
 
                 for(let i=0; i<Math.min(3, stations.length); i++) {
                     let stn = stations[i];
-                    let subMins = 30;
-                    try {
-                        const d = new Date();
-                        const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                        
-                        const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/100/상일동/${stn.name}/${dateStr} 12:00:00/1/%20/%20/Y`;
-                        const probeRes = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeApi)}`);
-                        const xml = new DOMParser().parseFromString(await probeRes.text(), "text/xml");
-                        
-                        if (xml.getElementsByTagName("resultCode")[0]?.textContent === "00") {
-                            subMins = Math.ceil(Number(xml.getElementsByTagName("totalreqHr")[0]?.textContent) / 60);
-                        }
-                    } catch(e) {}
-                    
-                    let totalRouteMins = subMins + stn.walk;
-                    printLog(`비교: [${stn.name}] 지하철 ${subMins}분 + 도보 ${stn.walk}분 = 총 ${totalRouteMins}분`);
+                    let totalRouteMins = stn.subMins + stn.walk;
+                    printLog(`비교: [${stn.name}] 지하철 ${stn.subMins}분 + 도보 ${stn.walk}분 = 총 ${totalRouteMins}분`);
                     
                     if (totalRouteMins < minTotalMins) {
                         minTotalMins = totalRouteMins;
-                        bestRoute = { ...stn, subMins };
+                        bestRoute = stn;
                     }
                 }
 
                 if(!bestRoute) throw new Error("경로를 연산할 수 없습니다.");
-                printLog(`✅ 수학적 최적 경로 선정: [${bestRoute.name}]역 경로`);
+                printLog(`✅ 수학적 최적 경로 선정: [${bestRoute.name}]역`);
 
-                // 모드 A: 마지노선 = 목표시간 - 도보시간
                 const limitMinsA = targetMins - bestRoute.walk;
                 await findRealTrain(bestRoute.name, limitMinsA, bestRoute.walk, placeName, targetTime, bestRoute.subMins, 'A');
                 
             } else {
                 let html = '';
-                stations.slice(0, 5).forEach(s => {
-                    // 모드 B: 마지노선 = 목표시간 (도보시간 무시)
-                    html += `<button class="station-btn" onclick="findRealTrain('${s.name}', ${targetMins}, ${s.walk}, '${placeName}', '${targetTime}', 30, 'B')">
-                        <span><i class="fas fa-subway"></i> ${s.name}역</span><span style="color:var(--orange)">도보 ${s.walk}분</span></button>`;
+                stations.forEach(s => {
+                    // 이제 하드코딩 30이 아닌 s.subMins(실제 지하철 소요시간)을 전달합니다.
+                    html += `<button class="station-btn" onclick="findRealTrain('${s.name}', ${targetMins}, ${s.walk}, '${placeName}', '${targetTime}', ${s.subMins}, 'B')">
+                        <span><i class="fas fa-subway"></i> ${s.name}역</span><span style="color:var(--orange)">도보 ${s.walk}분 (지하철 ${s.subMins}분)</span></button>`;
                 });
                 document.getElementById('station-list').innerHTML = html;
                 document.getElementById('station-selector').style.display = 'block';
@@ -215,7 +218,6 @@
         } catch(e) { printLog(`❌ 시스템 에러: ${e.message}`, "#ff453a"); }
     }
 
-    // mode 파라미터 추가
     async function findRealTrain(stnName, limitMins, walkMins, placeName, targetTimeStr, subMins, mode) {
         document.getElementById('station-selector').style.display = 'none';
         
@@ -229,7 +231,8 @@
         try {
             printLog(`3. 서울시 서버 접속: [${stnName}]역 ${minsToHm(limitMins)} 도착 배차표 스캔...`);
             
-            const offsets = [-30, -15, -1];
+            // 예상 탑승시간 기준, 더 넓게 0, 10분 후까지 스캔하여 도착 갱신을 놓치지 않음
+            const offsets = [-30, -15, 0, 10];
             let allTrains = [];
 
             for(let off of offsets) {
