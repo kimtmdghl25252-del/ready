@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 Premium v51.0</title>
+    <title>S26 Premium v52.0</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -15,6 +15,11 @@
         .input-box { background: var(--card); border: 1px solid #333; border-radius: 20px; padding: 25px; margin-bottom: 20px; }
         label { display: block; font-size: 12px; color: #888; margin-bottom: 8px; font-weight: bold; }
         input[type="text"], input[type="time"] { width: 100%; background: #000; border: 1px solid #444; border-radius: 12px; padding: 15px; color: #fff; font-size: 16px; box-sizing: border-box; margin-bottom: 20px; outline: none; font-weight: bold; }
+        
+        .radio-group { display: flex; gap: 10px; margin-bottom: 20px; }
+        .radio-label { flex: 1; text-align: center; background: #000; border: 1px solid #444; border-radius: 12px; padding: 12px; color: #aaa; font-size: 13px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .radio-label.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+        input[type="radio"] { display: none; }
 
         button { width: 100%; padding: 18px; border-radius: 14px; border: none; background: var(--blue); color: #fff; font-weight: 900; font-size: 16px; cursor: pointer; transition: 0.2s; }
         
@@ -37,21 +42,27 @@
 <div class="container">
     <div class="header">
         <span>S26 <span style="color:#fff;">Premium</span></span>
-        <span class="badge">v51.0 SMART AI</span>
+        <span class="badge">v52.0 DUAL MODE</span>
     </div>
 
     <div class="input-box">
-        <label>최종 목적지 (출발: 상일동 고정)</label>
+        <label>경로 탐색 모드</label>
+        <div class="radio-group">
+            <label class="radio-label active" id="label-A"><input type="radio" name="mode" value="A" checked onchange="toggleMode()"> 목적지로 (최단시간 자동)</label>
+            <label class="radio-label" id="label-B"><input type="radio" name="mode" value="B" onchange="toggleMode()"> 근처역으로 (스마트 필터링)</label>
+        </div>
+
+        <label>최종 목적지 (출발: 상일동역 고정)</label>
         <input type="text" id="dest" value="천호보건지소">
         
         <label>목표 도착 시각 (24H)</label>
         <input type="time" id="time" value="22:02">
         
-        <button onclick="startEngine()"><i class="fas fa-magic"></i> 최적 경로 스마트 연산</button>
+        <button onclick="startEngine()"><i class="fas fa-route"></i> 최적 경로 연산 시작</button>
     </div>
 
     <div id="station-selector">
-        <label style="color:var(--purple); font-size:14px; margin-bottom:10px; display:block;">선택 가능한 추천 경로 (출발시각 기준 정렬)</label>
+        <label style="color:var(--purple); font-size:14px; margin-bottom:10px; display:block;">선택 가능한 추천 경로 (출발 시각 기준)</label>
         <div id="station-list"></div>
     </div>
 
@@ -72,7 +83,7 @@
         <div id="res-meta" style="font-size: 13px; color: #888; border-top: 1px solid #222; padding-top: 15px; line-height: 1.6;"></div>
     </div>
 
-    <div id="log">대기 중... 사용자 맞춤 알고리즘 탑재 완료. (v51.0)</div>
+    <div id="log">대기 중... 듀얼 모드 준비 완료. (v52.0)</div>
 </div>
 
 <script>
@@ -85,11 +96,20 @@
     };
 
     let rainChart = null;
+    window.tempOptions = [];
 
     function printLog(msg, color = "#0f0") {
         const log = document.getElementById('log');
         log.innerHTML += `<div style="color:${color}; margin-bottom:4px;">> ${msg}</div>`;
         log.scrollTop = log.scrollHeight;
+    }
+
+    function toggleMode() {
+        const mode = document.querySelector('input[name="mode"]:checked').value;
+        document.getElementById('label-A').classList.toggle('active', mode === 'A');
+        document.getElementById('label-B').classList.toggle('active', mode === 'B');
+        document.getElementById('station-selector').style.display = 'none';
+        document.getElementById('result').style.display = 'none';
     }
 
     function hmToMins(timeStr) {
@@ -108,17 +128,14 @@
         return name.split(' ')[0].split('(')[0].replace(/역$/, '').trim();
     }
 
-    // 실제 카카오맵 도보 알고리즘 반영 (직선거리 * 1.35 가중치 / 67m/분)
     function calcRealWalkMins(straightDistance) {
         return Math.ceil((straightDistance * 1.35) / 67);
     }
 
-    // 뒤에서 선택하기 위해 옵션들을 전역 저장
-    window.tempOptions = [];
-
     async function startEngine() {
         const dest = document.getElementById('dest').value.trim();
         const targetTime = document.getElementById('time').value;
+        const mode = document.querySelector('input[name="mode"]:checked').value;
 
         document.getElementById('result').style.display = 'none';
         document.getElementById('station-selector').style.display = 'none';
@@ -153,18 +170,16 @@
                 }
             });
 
-            // 사용자 로직: 도보 15분 이내 역 추출
-            let walk15Stations = allStations.filter(s => s.walk <= 15);
             const targetMins = hmToMins(targetTime);
 
-            // [조건 1] 15분 이내 역이 없거나 1개일 때 -> 전체 역 중 최단시간 탐색 (자동)
-            if (walk15Stations.length <= 1) {
-                printLog(`[조건 감지] 15분 이내 역이 1개 이하입니다. 최단 이동시간 경로로 자동 결정합니다.`, "#bf5af2");
-                let topStations = allStations.slice(0, 3);
+            // [모드 A] 목적지로 (최단시간 경로 자동 선택)
+            if (mode === 'A') {
+                printLog(`[모드 A] 지하철+도보 합산 최단 경로 연산...`);
                 let bestRoute = null;
                 let minTotalMins = Infinity;
 
-                for(let stn of topStations) {
+                for(let i=0; i<Math.min(3, allStations.length); i++) {
+                    let stn = allStations[i];
                     let subMins = 30; 
                     try {
                         const d = new Date();
@@ -184,27 +199,30 @@
                     }
                 }
 
-                const limitMins = targetMins - bestRoute.walk;
-                let train = await fetchRealTrainSilent(bestRoute.name, limitMins, bestRoute.subMins);
+                if(!bestRoute) throw new Error("경로를 연산할 수 없습니다.");
+                printLog(`✅ 최적 경로 자동 선정: [${bestRoute.name}]역`);
+
+                const limitMinsA = targetMins - bestRoute.walk;
+                let train = await fetchRealTrainSilent(bestRoute.name, limitMinsA, bestRoute.subMins);
                 
                 if(train) {
-                    let opt = { stn: bestRoute, c: limitMins, d: train.depM, train: train, placeName, targetTime };
-                    renderFinalResult(opt);
+                    renderFinalResult({ stn: bestRoute, c: limitMinsA, d: train.depM, train: train, placeName, targetTime });
                 } else {
-                    throw new Error("서버 배차 응답 오류로 경로를 생성할 수 없습니다.");
+                    throw new Error("서버 배차 응답 오류.");
                 }
 
             } 
-            // [조건 2] 15분 이내 역이 2개 이상일 때 -> 출발시간 기반 필터링 및 선택창 제공
+            // [모드 B] 근처역으로 (스마트 필터링 및 선택)
             else {
-                printLog(`[조건 감지] 15분 이내 역이 ${walk15Stations.length}개 있습니다. 정밀 역산 후 선택창을 구성합니다.`, "#bf5af2");
-                let validOptions = [];
-
-                for(let stn of walk15Stations.slice(0, 4)) { // 랙 방지를 위해 상위 4개까지만 스캔
+                let walk15Stations = allStations.filter(s => s.walk <= 15);
+                
+                if (walk15Stations.length <= 1) {
+                    printLog(`⚠️ 15분 이내 역이 부족하여 모드 A(최단경로 자동)로 전환합니다.`, "#ff9f0a");
+                    // 모드 A와 동일한 폴백 로직
+                    let stn = allStations[0];
                     let subMins = 30; 
                     try {
-                        const d = new Date();
-                        const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                        const dateStr = new Date().toISOString().slice(0,10);
                         const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/100/상일동/${stn.name}/${dateStr} 12:00:00/1/%20/%20/Y`;
                         const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeApi)}`);
                         const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
@@ -212,52 +230,67 @@
                             subMins = Math.ceil(Number(xml.getElementsByTagName("totalreqHr")[0]?.textContent) / 60);
                         }
                     } catch(e) {}
-
-                    let limitMins = targetMins - stn.walk; // c: 목적시간 - 도보시간
-                    let train = await fetchRealTrainSilent(stn.name, limitMins, subMins); // d 구하기
                     
-                    if(train) {
-                        validOptions.push({ stn: stn, c: limitMins, d: train.depM, train: train, placeName, targetTime });
-                    }
-                }
-
-                if(validOptions.length === 0) throw new Error("적합한 배차표를 찾을 수 없습니다.");
-
-                // d를 가장 늦은 시각부터 차례대로 나열 (내림차순)
-                validOptions.sort((a, b) => b.d - a.d);
-
-                let maxD = validOptions[0].d; // 가장 늦게 출발해도 되는 최적 시각
-                
-                // d - 15분 보다 이른 시각 삭제
-                let finalOptions = validOptions.filter(o => o.d >= maxD - 15);
-
-                if (finalOptions.length === 1) {
-                    printLog("필터링 결과 압도적인 단일 최적 경로가 도출되어 자동 확정합니다.");
-                    renderFinalResult(finalOptions[0]);
+                    const limitMins = targetMins - stn.walk;
+                    let train = await fetchRealTrainSilent(stn.name, limitMins, subMins);
+                    if(train) renderFinalResult({ stn: stn, c: limitMins, d: train.depM, train: train, placeName, targetTime });
+                    
                 } else {
+                    printLog(`[모드 B] 역 ${walk15Stations.length}개 대상 정밀 역산 스캔 시작...`);
+                    let validOptions = [];
+
+                    for(let stn of walk15Stations.slice(0, 4)) {
+                        let subMins = 30; 
+                        try {
+                            const dateStr = new Date().toISOString().slice(0,10);
+                            const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/100/상일동/${stn.name}/${dateStr} 12:00:00/1/%20/%20/Y`;
+                            const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeApi)}`);
+                            const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
+                            if (xml.getElementsByTagName("resultCode")[0]?.textContent === "00") {
+                                subMins = Math.ceil(Number(xml.getElementsByTagName("totalreqHr")[0]?.textContent) / 60);
+                            }
+                        } catch(e) {}
+
+                        let limitMins = targetMins - stn.walk; // c = 목표 - 도보
+                        let train = await fetchRealTrainSilent(stn.name, limitMins, subMins); // d 구하기
+                        
+                        if(train) {
+                            validOptions.push({ stn: stn, c: limitMins, d: train.depM, train: train, placeName, targetTime });
+                        }
+                    }
+
+                    if(validOptions.length === 0) throw new Error("적합한 배차표를 찾을 수 없습니다.");
+
+                    // 내림차순 정렬 (가장 늦게 나가는 순서)
+                    validOptions.sort((a, b) => b.d - a.d);
+                    let maxD = validOptions[0].d; 
+                    
+                    // 가장 늦은 출발시간 기준 -15분 이내만 필터링
+                    let finalOptions = validOptions.filter(o => o.d >= maxD - 15);
+
                     window.tempOptions = finalOptions;
                     let html = '';
                     finalOptions.forEach((opt, idx) => {
                         html += `<button class="station-btn" onclick="selectOption(${idx})">
                             <div style="text-align:left;">
                                 <div style="font-size:15px; margin-bottom:4px;"><i class="fas fa-subway"></i> ${opt.stn.name}역 하차 (도보 ${opt.stn.walk}분)</div>
-                                <div style="font-size:12px; color:#888;">${opt.stn.name}역 도착 목표: ${minsToHm(opt.c)}</div>
+                                <div style="font-size:12px; color:#888;">역 도착 마지노선: ${minsToHm(opt.c)}</div>
                             </div>
                             <div style="text-align:right;">
-                                <div style="font-size:11px; color:var(--green); margin-bottom:2px;">상일동 출발</div>
+                                <div style="font-size:11px; color:var(--green); margin-bottom:2px;">출발 시각 (d)</div>
                                 <div style="font-size:18px; font-weight:bold; color:var(--blue);">${minsToHm(opt.d)}</div>
                             </div>
                         </button>`;
                     });
                     document.getElementById('station-list').innerHTML = html;
                     document.getElementById('station-selector').style.display = 'block';
-                    printLog("스캔 완료. 원하는 경로를 선택해 주세요.");
+                    printLog("스캔 완료. 원하는 경로를 선택해 주세요.", "#30d158");
                 }
             }
         } catch(e) { printLog(`❌ 시스템 에러: ${e.message}`, "#ff453a"); }
     }
 
-    // 화면 표출 없이 조용히 배차를 긁어오는 함수
+    // 조용히 배차표 긁어오기
     async function fetchRealTrainSilent(stnName, limitMins, subMins) {
         const expectedDepMins = limitMins - subMins;
         const d = new Date();
@@ -305,14 +338,14 @@
         return bestTrain;
     }
 
-    // 선택창에서 유저가 클릭했을 때 실행
+    // 리스트에서 클릭 시 최종 렌더링
     function selectOption(idx) {
         const opt = window.tempOptions[idx];
         document.getElementById('station-selector').style.display = 'none';
         renderFinalResult(opt);
     }
 
-    // 최종 결과 카드 렌더링
+    // 결과 출력 
     function renderFinalResult(opt) {
         document.getElementById('result').style.display = 'block';
         
@@ -325,10 +358,9 @@
             이동 계획: 하차역(${opt.stn.name}) 도착 후 실제 도보 ${opt.stn.walk}분<br>
             <span style="color:var(--green)">하차역 실제 도착 예정 시각: ${opt.train.arr}</span>
         `;
-        printLog(`최종 확정: [${opt.stn.name}역 하차 경로] 생성 완료.`, "#30d158");
     }
 
-    // 기상청 데이터 처리 (UI 수정 포함)
+    // 기상청 옷차림/차트
     async function processKMAWeather(lat, lon, targetH) {
         const grid = dfs_xy_conv(lat, lon);
         const baseDate = new Date().toISOString().slice(0,10).replace(/-/g, '');
@@ -352,12 +384,12 @@
 
             const rules = [
                 { min: 28, max: 99, label: "28도 이상", text: "민소매, 반팔, 반바지" },
-                { min: 23, max: 27, label: "27도~23도", text: "반팔, 얇은 셔츠/바지" },
-                { min: 20, max: 22, label: "22도~20도", text: "긴팔 티셔츠, 얇은 가디건" },
-                { min: 17, max: 19, label: "19도~17도", text: "얇은 니트, 맨투맨, 가을 자켓" },
-                { min: 12, max: 16, label: "16도~12도", text: "자켓, 야상, 두꺼운 가디건" },
-                { min: 9, max: 11, label: "11도~9도", text: "트렌치코트, 야상, 점퍼" },
-                { min: 5, max: 8, label: "8도~5도", text: "코트, 가죽자켓, 히트텍" },
+                { min: 23, max: 27, label: "27도 ~ 23도", text: "반팔, 얇은 셔츠/바지" },
+                { min: 20, max: 22, label: "22도 ~ 20도", text: "긴팔 티셔츠, 얇은 가디건" },
+                { min: 17, max: 19, label: "19도 ~ 17도", text: "얇은 니트, 맨투맨, 가을 자켓" },
+                { min: 12, max: 16, label: "16도 ~ 12도", text: "자켓, 야상, 두꺼운 가디건" },
+                { min: 9, max: 11, label: "11도 ~ 9도", text: "트렌치코트, 야상, 점퍼" },
+                { min: 5, max: 8, label: "8도 ~ 5도", text: "코트, 가죽자켓, 히트텍" },
                 { min: -99, max: 4, label: "4도 이하", text: "패딩, 두꺼운 코트, 방한용품" }
             ];
 
@@ -369,7 +401,7 @@
             });
 
             document.getElementById('w-temp').innerText = `기온: 최저 ${minT}°C ~ 최고 ${maxT}°C`;
-            document.getElementById('w-clothes').innerHTML = `<b>도착 시점 추천 코디 스펙트럼:</b><br>${recommendations.join('<br>')}`;
+            document.getElementById('w-clothes').innerHTML = `<b>목적지 도착 시점 추천 코디 스펙트럼:</b><br>${recommendations.join('<br>')}`;
             
             if(rainChart) rainChart.destroy();
             const pointColors = pops.map(p => p >= 40 ? '#ff453a' : '#0a84ff');
