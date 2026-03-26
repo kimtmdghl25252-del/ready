@@ -27,8 +27,7 @@
         button { width: 100%; padding: 20px; border-radius: 14px; border: none; background: var(--blue); color: #fff; font-weight: 900; font-size: 18px; cursor: pointer; transition: 0.2s; }
         button:disabled { background: #444; color: #888; cursor: not-allowed; }
         
-        /* 에러 메시지 박스 */
-        #error-box { display: none; background: rgba(255,69,58,0.1); border: 1px solid var(--red); color: var(--red); padding: 15px; border-radius: 12px; margin-bottom: 20px; font-weight: bold; font-size: 14px; text-align: center; line-height: 1.5; }
+        #error-box { display: none; background: rgba(255,69,58,0.1); border: 1px solid var(--red); color: var(--red); padding: 15px; border-radius: 12px; margin-bottom: 20px; font-weight: bold; font-size: 14px; text-align: center; line-height: 1.5; word-break: keep-all; }
 
         #station-selector { display: none; margin-bottom: 20px; }
         .station-btn { background: #222; border: 1px solid #444; color: #fff; padding: 15px; margin-bottom: 10px; border-radius: 12px; text-align: left; display: flex; justify-content: space-between; align-items: center; width: 100%; cursor: pointer; border-left: 4px solid var(--purple); }
@@ -60,7 +59,7 @@
 
 <div class="container">
     <div id="header-badge">
-        <span class="badge">Master (Logic Stable)</span>
+        <span class="badge">Master (Bug Fixed)</span>
     </div>
 
     <div id="error-box"></div>
@@ -109,9 +108,6 @@
 </div>
 
 <script>
-/**
- * S26App: 네임스페이스 패턴 적용 및 기능 모듈화
- */
 const S26App = (function() {
     const CONFIG = {
         KAKAO: '56b6a0adbc28cab6f7c87ac9f84b14d0',
@@ -126,7 +122,6 @@ const S26App = (function() {
     let charts = { rain: null, temp: null };
     let tempOptions = [];
 
-    /* ================= Helper Functions ================= */
     const showError = (msg) => {
         const box = document.getElementById('error-box');
         box.innerText = msg;
@@ -150,7 +145,13 @@ const S26App = (function() {
     const cleanStationName = (name) => name.split(' ')[0].split('(')[0].replace(/역$/, '').trim();
     const calcRealWalkMins = (distance) => Math.ceil((distance * CONFIG.WALK_FACTOR) / CONFIG.WALK_SPEED_MPM);
 
-    // 기상청 API 동적 base_time 계산 로직 
+    // KST 기준 날짜 문자열 반환 (새벽 자정 버그 원천 차단)
+    const getKSTDateString = () => {
+        const d = new Date();
+        d.setHours(d.getHours() + 9);
+        return d.toISOString().slice(0, 10);
+    };
+
     const getDynamicKmaBaseTime = () => {
         const now = new Date();
         let h = now.getHours();
@@ -173,7 +174,6 @@ const S26App = (function() {
         };
     };
 
-    /* ================= Chart Plugins ================= */
     const tempThresholdPlugin = {
         id: 'tempThresholds',
         beforeDraw: (chart) => {
@@ -206,13 +206,17 @@ const S26App = (function() {
         }
     };
 
-    /* ================= Core API Logics ================= */
+    // ★ 치명적이었던 더블 인코딩(Double Encoding) 버그 완벽 제거
     const fetchSubwayTravelMins = async (stnName) => {
         let e = null; 
         let routeStr = `[경로] 상일동역 탑승 ➔ ${stnName}역 하차`;
         try {
-            const dateStr = new Date().toISOString().slice(0,10);
-            const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/1/상일동/${encodeURIComponent(stnName)}/${dateStr} 12:00:00/1/%20/%20/Y`;
+            const dateStr = getKSTDateString();
+            
+            // 주의: stnName을 절대 encodeURIComponent로 미리 감싸지 마세요.
+            // probeApi 문자열 생성 후 통째로 프록시에 던질 때 단 한 번만 인코딩해야 서울시 서버가 인식합니다.
+            const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/1/상일동/${stnName}/${dateStr} 12:00:00/1/%20/%20/Y`;
+            
             const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeApi)}`);
             const xmlText = await res.text();
             const xml = new DOMParser().parseFromString(xmlText, "text/xml");
@@ -227,18 +231,20 @@ const S26App = (function() {
                 routeStr = `[경로] 상일동역 탑승 ➔ ${transfers.join(' ➔ ')} ➔ ${stnName}역 하차`;
             }
         } catch(err) {
-            console.warn(`fetchE Error for ${stnName}:`, err);
+            console.warn(`[${stnName}역] 파싱 에러:`, err);
         }
         
-        if(e === null) throw new Error(`[${stnName}역] 통신 에러 발생`);
+        if(e === null) throw new Error(`[${stnName}역] 정보를 불러올 수 없습니다. 통신 지연 혹은 점검 중입니다.`);
         return { subwayTravelMins: e, routeStr };
     };
 
-    // 유저 정의 A* 타임 시프팅 스캔 로직 (무한루프 방어 완비)
+    // 유저의 "I = I - 1분" 알고리즘이 API 에러 시에도 무조건 발동하도록 보장
     const fetchOptimalTrain = async (stnName, latestArrivalAtStation, limitDepMins, subwayTravelMins, routeStr) => {
-        const dateStr = new Date().toISOString().slice(0,10);
-        let reqTimeStr = minsToHm(limitDepMins - 30) + ':00'; // 안전 구간 스캔
-        let apiUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/15/상일동/${encodeURIComponent(stnName)}/${dateStr} ${reqTimeStr}/1/%20/%20/Y`;
+        const dateStr = getKSTDateString();
+        let reqTimeStr = minsToHm(limitDepMins - 30) + ':00'; 
+        
+        // 여기도 마찬가지로 stnName 이중 인코딩 금지
+        let apiUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/15/상일동/${stnName}/${dateStr} ${reqTimeStr}/1/%20/%20/Y`;
 
         let bestTrain = null;
         try {
@@ -253,7 +259,7 @@ const S26App = (function() {
                 let deps = paths[i].getElementsByTagName("trainDptreTm");
                 if (deps.length > 0 && deps[0].textContent) {
                     let depM = hmToMins(deps[0].textContent);
-                    let arrM = depM + subwayTravelMins; // 절대 수식 적용
+                    let arrM = depM + subwayTravelMins; // 절대불변 수식
                     
                     if (arrM <= latestArrivalAtStation && depM > bestDepMins) {
                         bestDepMins = depM;
@@ -267,32 +273,33 @@ const S26App = (function() {
                     }
                 }
             }
-            
-            // API가 정상적인 데이터를 주지 못했을 경우 유저 알고리즘(I = I - 1) 수동 발동
-            if (!bestTrain) {
-                let manualDepM = limitDepMins;
-                let manualArrM = manualDepM + subwayTravelMins;
-                let loopCount = 0;
-                
-                while (manualArrM > latestArrivalAtStation) {
-                    manualDepM -= 1;
-                    manualArrM = manualDepM + subwayTravelMins;
-                    loopCount++;
-                    // 무한루프 방어 (최대 120회)
-                    if(loopCount > 120 || manualDepM < 0) break;
-                }
-                
-                bestTrain = {
-                    depM: manualDepM,
-                    arrM: manualArrM,
-                    depText: minsToHm(manualDepM),
-                    arrText: minsToHm(manualArrM),
-                    routeStr: routeStr
-                };
-            }
         } catch(err) {
-            console.warn("fetchOptimalTrain Error:", err);
+            console.warn(`[${stnName}역] 실시간 API 응답 실패. A* 역산 백업 로직을 발동합니다.`);
         }
+        
+        // API가 데이터를 못 찾았거나 통신 에러가 났어도 앱이 뻗지 않음
+        // 유저가 직접 짠 수동 루프 로직 무조건 발동
+        if (!bestTrain) {
+            let manualDepM = limitDepMins;
+            let manualArrM = manualDepM + subwayTravelMins;
+            let loopCount = 0;
+            
+            while (manualArrM > latestArrivalAtStation) {
+                manualDepM -= 1;
+                manualArrM = manualDepM + subwayTravelMins;
+                loopCount++;
+                if(loopCount > 120 || manualDepM < 0) break; // 무한루프 방어
+            }
+            
+            bestTrain = {
+                depM: manualDepM,
+                arrM: manualArrM,
+                depText: minsToHm(manualDepM),
+                arrText: minsToHm(manualArrM),
+                routeStr: routeStr
+            };
+        }
+        
         return bestTrain;
     };
 
@@ -353,12 +360,9 @@ const S26App = (function() {
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100, ticks: {color: '#888', stepSize: 20}, grid: {color: '#333'} }, x: { ticks: {color: '#888'}, grid: {display: false} } } },
                 plugins: [popThresholdPlugin]
             });
-        } catch(e) {
-            console.warn("날씨 연산 오류:", e);
-        }
+        } catch(e) {}
     };
 
-    /* ================= Rendering Functions ================= */
     const renderResult = (opt) => {
         document.getElementById('result').style.display = 'block';
         document.getElementById('res-door').innerText = minsToHm(opt.doorDepartureMins);
@@ -378,7 +382,6 @@ const S26App = (function() {
         document.getElementById('result').scrollIntoView({ behavior: 'smooth' }); 
     };
 
-    /* ================= Main Controller ================= */
     const startEngine = async () => {
         const btnSubmit = document.getElementById('btn-submit');
         const loader = document.getElementById('loader');
@@ -398,7 +401,6 @@ const S26App = (function() {
             const mode = document.querySelector('input[name="mode"]:checked').value;
             const targetArrivalMins = hmToMins(targetTimeStr); 
 
-            // 카카오 장소 검색
             const kRes = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(dest)}`, { headers: { Authorization: `KakaoAK ${CONFIG.KAKAO}` }});
             const kData = await kRes.json();
             if(!kData.documents || kData.documents.length === 0) throw new Error(`'${dest}' 장소를 찾을 수 없습니다.`);
@@ -406,7 +408,6 @@ const S26App = (function() {
             
             processWeather(destY, destX, parseInt(targetTimeStr.split(':')[0]));
 
-            // 카카오 역 검색
             const sRes = await fetch(`https://dapi.kakao.com/v2/local/search/category.json?category_group_code=SW8&x=${destX}&y=${destY}&radius=2000&sort=distance`, { headers: { Authorization: `KakaoAK ${CONFIG.KAKAO}` }});
             const sData = await sRes.json();
             if(!sData.documents || sData.documents.length === 0) throw new Error("근처에 지하철역이 존재하지 않습니다.");
@@ -424,7 +425,7 @@ const S26App = (function() {
             const walkMinsFirst = top5[0].walkMins;
             top5 = top5.filter(stn => stn.walkMins < walkMinsFirst + 15);
 
-            // 병렬 처리 적용 (속도 개선 및 에러 통과 방어)
+            // Promise.all로 병렬 처리 속도 향상
             const ePromises = top5.map(async (stn) => {
                 try {
                     let routeInfo = await fetchSubwayTravelMins(stn.name);
@@ -433,13 +434,13 @@ const S26App = (function() {
                     stn.totalTravelMins = stn.walkMins + stn.subwayTravelMins;
                     return stn;
                 } catch(e) {
-                    console.warn(e);
-                    return null; // 에러 난 역은 제외하고 진행
+                    console.warn(`[통신 에러로 스킵] ${stn.name}역`);
+                    return null; 
                 }
             });
             
             let validStations = (await Promise.all(ePromises)).filter(s => s !== null);
-            if(validStations.length === 0) throw new Error("모든 주변 역의 지하철 정보를 불러오는 데 실패했습니다.");
+            if(validStations.length === 0) throw new Error("모든 주변 역의 지하철 정보를 불러오는 데 실패했습니다. 서버 통신 상태를 확인해주세요.");
 
             validStations.sort((a,b) => a.totalTravelMins - b.totalTravelMins);
             const totalTravelFirst = validStations[0].totalTravelMins;
@@ -447,12 +448,11 @@ const S26App = (function() {
 
             if (mode === 'A') {
                 let bestStation = validStations[0];
-                let latestArrivalAtStation = targetArrivalMins - bestStation.walkMins;
-                let limitDepMins = latestArrivalAtStation - bestStation.subwayTravelMins;
+                let latestArrivalAtStation = targetArrivalMins - bestStation.walkMins; // G = A - c
+                let limitDepMins = latestArrivalAtStation - bestStation.subwayTravelMins; // I = G - e
 
                 let train = await fetchOptimalTrain(bestStation.name, latestArrivalAtStation, limitDepMins, bestStation.subwayTravelMins, bestStation.routeStr);
-                if(!train) throw new Error("배차 응답 오류로 경로를 생성할 수 없습니다.");
-
+                
                 let doorDepartureMins = train.depM - CONFIG.MARGIN;
                 let finalArrivalMins = train.arrM + bestStation.walkMins;
 
@@ -461,7 +461,7 @@ const S26App = (function() {
             else {
                 let options = [];
                 const optionPromises = validStations.map(async (bestStation) => {
-                    let latestArrivalAtStation = targetArrivalMins; // 모드 B는 도보시간 무시
+                    let latestArrivalAtStation = targetArrivalMins; // 모드 B: Gn = A (도보 무시)
                     let limitDepMins = latestArrivalAtStation - bestStation.subwayTravelMins;
 
                     let train = await fetchOptimalTrain(bestStation.name, latestArrivalAtStation, limitDepMins, bestStation.subwayTravelMins, bestStation.routeStr);
