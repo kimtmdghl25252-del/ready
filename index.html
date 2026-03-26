@@ -52,7 +52,7 @@
 
 <div class="container">
     <div id="header-badge">
-        <span class="badge">v63.0</span>
+        <span class="badge">vFinal (Engine Fix)</span>
     </div>
 
     <div class="input-box">
@@ -134,6 +134,7 @@
     function cleanStationName(name) { return name.split(' ')[0].split('(')[0].replace(/역$/, '').trim(); }
     function calcRealWalkMins(straightDistance) { return Math.ceil((straightDistance * 1.35) / 67); }
 
+    // Chart.js 온도 기준선 커스텀 플러그인 (표시될 범위 안의 기준선만 렌더링)
     const tempThresholdPlugin = {
         id: 'tempThresholds',
         beforeDraw: (chart) => {
@@ -142,6 +143,7 @@
             const thresholds = [4, 8, 11, 16, 19, 22, 27];
             thresholds.forEach(val => {
                 const yPos = y.getPixelForValue(val);
+                // yPos가 차트 영역(top~bottom) 내에 존재할 때만 점선을 그립니다.
                 if (yPos > top && yPos < bottom) {
                     ctx.beginPath();
                     ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
@@ -159,6 +161,7 @@
         }
     };
 
+    // Chart.js 강수 확률 40% 기준선 커스텀 플러그인
     const popThresholdPlugin = {
         id: 'popThreshold',
         beforeDraw: (chart) => {
@@ -181,22 +184,6 @@
         }
     };
 
-    // 역까지의 예상 소요 시간(subMins)을 긁어오는 함수
-    async function fetchSubMins(stnName) {
-        let subMins = 30; // 기본값
-        try {
-            const dateStr = new Date().toISOString().slice(0,10);
-            // 소요시간 탐색용은 /1/1/ 로 충분함
-            const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/1/상일동/${stnName}/${dateStr} 12:00:00/1/%20/%20/Y`;
-            const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeApi)}`);
-            const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
-            if (xml.getElementsByTagName("resultCode")[0]?.textContent === "00") {
-                subMins = Math.ceil(Number(xml.getElementsByTagName("totalreqHr")[0]?.textContent) / 60);
-            }
-        } catch(e) {}
-        return subMins;
-    }
-
     async function startEngine() {
         const dest = document.getElementById('dest').value.trim();
         const targetTimeStr = document.getElementById('time').value;
@@ -208,7 +195,7 @@
         document.getElementById('loader').style.display = 'block';
 
         try {
-            const kRes = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(dest)}`, { headers: { Authorization: `KakaoAK ${CONFIG.KAKAO}` }});
+            const kRes = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(dest)}`, { headers: { Authorization: `KakaoAK ${CONFIG.KAKaoAK} ${CONFIG.KAKAO}` }});
             const kData = await kRes.json();
             if(!kData.documents[0]) throw new Error("장소를 찾을 수 없습니다.");
             const { x: destX, y: destY, place_name: placeName } = kData.documents[0];
@@ -230,46 +217,39 @@
             // 모드 A: 목적지로 (도보 시간 무조건 차감)
             // ==========================================
             if (mode === 'A') {
-                let bestOption = null;
-                let latestDepMins = -Infinity; // 가장 늦게 출발해도 되는 최적의 경로 찾기
+                let validOptions = [];
+                const promises = allStations.slice(0, 3).map(async (stn) => {
+                    // 모드 A: 마지노선 = 목표시간 - 도보시간
+                    let limitMins = targetMins - stn.walk; 
+                    let train = await fetchRealTrainSilent(stn.name, limitMins);
+                    if(train) validOptions.push({ stn, train, targetTimeStr, routeMode: 'A' });
+                });
 
-                for(let stn of allStations.slice(0, 3)) {
-                    let subMins = await fetchSubMins(stn.name);
-                    let limitMins = targetMins - stn.walk; // 모드 A: 도보시간 차감
-                    
-                    let train = await fetchRealTrainSilent(stn.name, limitMins, subMins);
-                    if(train && train.depM > latestDepMins) {
-                        latestDepMins = train.depM;
-                        bestOption = { stn, train, targetTimeStr, routeMode: 'A' };
-                    }
-                }
-
-                if(!bestOption) throw new Error("경로를 연산할 수 없습니다.");
-                renderFinalResult(bestOption);
+                await Promise.all(promises);
+                if(validOptions.length === 0) throw new Error("경로를 연산할 수 없습니다.");
+                
+                // 집에서 가장 늦게 나가도 되는(출발 시간이 가장 늦은) 최적 경로 선택
+                validOptions.sort((a, b) => b.train.depM - a.train.depM);
+                renderFinalResult(validOptions[0]);
             } 
             // ==========================================
             // 모드 B: 근처역으로 (도보 시간 철저히 배제)
             // ==========================================
             else {
                 let walk15Stations = allStations.filter(s => s.walk <= 15);
-                if(walk15Stations.length === 0) walk15Stations = allStations.slice(0, 2); // 15분 이내 없으면 가장 가까운 2개
+                if(walk15Stations.length === 0) walk15Stations = allStations.slice(0, 2);
 
                 let validOptions = [];
-                for(let stn of walk15Stations.slice(0, 4)) {
-                    let subMins = await fetchSubMins(stn.name);
-                    
+                const promises = walk15Stations.slice(0, 4).map(async (stn) => {
                     // ★ 모드 B 핵심: 도보 시간을 절대 빼지 않음 (목표 시간 = 하차역 도착 마지노선)
                     let limitMins = targetMins; 
-                    
-                    let train = await fetchRealTrainSilent(stn.name, limitMins, subMins); 
-                    if(train) {
-                        validOptions.push({ stn, train, targetTimeStr, routeMode: 'B' });
-                    }
-                }
+                    let train = await fetchRealTrainSilent(stn.name, limitMins); 
+                    if(train) validOptions.push({ stn, train, targetTimeStr, routeMode: 'B' });
+                });
 
+                await Promise.all(promises);
                 if(validOptions.length === 0) throw new Error("적합한 배차표를 찾을 수 없습니다.");
                 
-                // 출발 시간이 가장 늦은 순으로 정렬
                 validOptions.sort((a, b) => b.train.depM - a.train.depM);
                 let maxD = validOptions[0].train.depM; 
                 let finalOptions = validOptions.filter(o => o.train.depM >= maxD - 15);
@@ -302,22 +282,21 @@
         }
     }
 
-    // ★ 쓰레기 경로 배제: /1/5/ 로 정상적인 최단 직통 경로 5개만 가져오기
-    async function fetchRealTrainSilent(stnName, limitMins, subMins) {
-        const expectedDepMins = limitMins - subMins;
+    // ★ 쓰레기 경로 원천 차단: /1/100/으로 전체 경로 보장 & 촘촘한 오프셋 스캔
+    async function fetchRealTrainSilent(stnName, limitMins) {
         const d = new Date();
         const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         
-        // 예측 탑승시간 앞뒤로 2번만 찌르면 정상 배차 10개를 긁어옴
-        const offsets = [-30, -10];
+        // 목표 시간 기준으로 최대 1시간 전부터 15분 단위로 촘촘히 찌름
+        const offsets = [-60, -45, -30, -15, -5];
         let allTrains = [];
 
-        for(let off of offsets) {
-            let reqMins = expectedDepMins + off;
+        const promises = offsets.map(async (off) => {
+            let reqMins = limitMins + off;
             let reqTimeStr = minsToHm(reqMins) + ':00';
             
-            // /1/5/ 로 정상 최단 경로만 필터링
-            let apiUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/5/상일동/${stnName}/${dateStr} ${reqTimeStr}/1/%20/%20/Y`;
+            // ★ /1/100/ 필수! 중간에 경로가 짤리는 것을 방지
+            let apiUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/100/상일동/${stnName}/${dateStr} ${reqTimeStr}/1/%20/%20/Y`;
             try {
                 let res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(apiUrl)}`);
                 let xmlText = await res.text();
@@ -334,7 +313,9 @@
                     }
                 }
             } catch(e) {}
-        }
+        });
+
+        await Promise.all(promises);
 
         let bestTrain = null; 
         let minDiff = Infinity;
@@ -343,7 +324,7 @@
                 let diff = limitMins - t.arrM;
                 if(diff < -720) diff += 1440; if(diff > 720) diff -= 1440;
                 
-                // 도착 마지노선(limitMins)을 넘지 않으면서 가장 바짝 붙은 막차
+                // 도착 마지노선(limitMins)을 넘지 않으면서(diff >= 0) 가장 바짝 붙은(minDiff) 완벽한 막차
                 if(diff >= 0 && diff < minDiff) { 
                     minDiff = diff; 
                     bestTrain = t; 
@@ -363,12 +344,14 @@
         document.getElementById('loader').style.display = 'none';
         document.getElementById('result').style.display = 'block';
         
+        // 파란색 대형 시간 (외출 시간)
         const doorMins = opt.train.depM - CONFIG.MARGIN;
         document.getElementById('res-door').innerText = minsToHm(doorMins);
         
+        // 초 단위 절삭
         const arrStr = opt.train.arr.substring(0, 5); 
         
-        // 모드 분기 (모드 B는 도보시간 완전히 숨김)
+        // ★ 모드별 UI 텍스트 완벽 분리 ★
         if (opt.routeMode === 'A') {
             const arrTimeArr = opt.train.arr.split(':').map(Number);
             const arrMins = arrTimeArr[0] * 60 + arrTimeArr[1];
@@ -377,6 +360,7 @@
                 [하차: <span>${arrStr}</span> / 도보 <span>${opt.stn.walk}분</span> / 도착: <span>${minsToHm(finalArrMins)}</span>]
             `;
         } else {
+            // 모드 B: 도보 정보 일절 미노출! 오직 역 도착 시간만 표기
             document.getElementById('res-summary').innerHTML = `
                 [하차: <span>${arrStr}</span> / 목표: <span>${opt.targetTimeStr}</span>]
             `;
@@ -421,6 +405,7 @@
             document.getElementById('w-temp-min').innerText = minT;
             document.getElementById('w-clothes').innerHTML = `${recommendations.join('<br>')}`;
             
+            // 온도 차트 Y축 다이내믹 줌인
             const yMinTemp = minT - 2;
             const yMaxTemp = maxT + 2;
 
