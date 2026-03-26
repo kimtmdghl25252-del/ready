@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 Premium v44.0</title>
+    <title>S26 Premium v45.0</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -42,7 +42,7 @@
 <div class="container">
     <div class="header">
         <span>S26 <span style="color:#fff;">Premium</span></span>
-        <span class="badge">v44.0</span>
+        <span class="badge">v45.0</span>
     </div>
 
     <div class="input-box">
@@ -83,7 +83,7 @@
         <div id="res-meta" style="font-size: 13px; color: #888; border-top: 1px solid #222; padding-top: 15px; line-height: 1.6;"></div>
     </div>
 
-    <div id="log">시스템 대기 중. (v44.0)</div>
+    <div id="log">시스템 대기 중. (v45.0)</div>
 </div>
 
 <script>
@@ -91,8 +91,8 @@
         KAKAO: '56b6a0adbc28cab6f7c87ac9f84b14d0',
         SEOUL: '597057594f6b696d3438526a7a564e',
         KMA: 'ddfd71d0b929827fd9c3c1851b50c301f9afb482a3143c0b39e135f9b3b8f070',
-        // https://script.google.com/macros/s/AKfycbxRODYhCj2NupEwxZm7YEigfFM_N_wg5TXUHWGtDvirC_clahAQgx7Z4bT94rJX9fZWtg/exec
-        PROXY: 'https://script.google.com/macros/s/https://script.google.com/macros/s/AKfycbxRODYhCj2NupEwxZm7YEigfFM_N_wg5TXUHWGtDvirC_clahAQgx7Z4bT94rJX9fZWtg/exec/exec',
+        // 사용자님이 발급하신 정확한 프록시 주소 하드코딩 완료
+        PROXY: 'https://script.google.com/macros/s/AKfycbxRODYhCj2NupEwxZm7YEigfFM_N_wg5TXUHWGtDvirC_clahAQgx7Z4bT94rJX9fZWtg/exec',
         MARGIN: 10
     };
 
@@ -133,11 +133,6 @@
         const dest = document.getElementById('dest').value.trim();
         const targetTime = document.getElementById('time').value;
         const mode = document.querySelector('input[name="mode"]:checked').value;
-        
-        if (CONFIG.PROXY.includes("새로_배포한")) {
-            printLog("❌ 프록시 주소를 업데이트해야 합니다.", "#ff453a");
-            return;
-        }
 
         document.getElementById('result').style.display = 'none';
         document.getElementById('log').innerHTML = "";
@@ -182,7 +177,6 @@
                         const d = new Date();
                         const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
                         
-                        // [v44.0 버그수정] 프록시 전달 전 이중 인코딩 금지
                         const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/1/상일동/${stn.name}/${dateStr} 12:00:00/1/%20/%20/Y`;
                         const probeRes = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeApi)}`);
                         const xml = new DOMParser().parseFromString(await probeRes.text(), "text/xml");
@@ -241,7 +235,6 @@
                 let reqMins = expectedDepMins + off;
                 let reqTimeStr = minsToHm(reqMins) + ':00';
                 
-                // [v44.0 버그수정] URL 조합 시 변수에 encodeURIComponent 사용 안 함. 프록시에 보낼 때만 1번 인코딩.
                 let apiUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/5/상일동/${stnName}/${dateStr} ${reqTimeStr}/1/%20/%20/Y`;
                 let res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(apiUrl)}`);
                 let xmlText = await res.text();
