@@ -28,7 +28,10 @@
         .station-btn { background: #222; border: 1px solid #444; color: #fff; padding: 15px; margin-bottom: 10px; border-radius: 12px; text-align: left; display: flex; justify-content: space-between; align-items: center; width: 100%; cursor: pointer; border-left: 4px solid var(--purple); }
         
         .result-card { background: linear-gradient(145deg, #1a1a1c, #000); border: 1px solid var(--blue); border-radius: 24px; padding: 35px 20px; text-align: center; display: none; margin-top: 20px; }
-        .door-time { font-size: 85px; font-weight: 900; color: var(--blue); letter-spacing: -4px; margin: 0 0 15px 0; line-height: 1; }
+        .door-time { font-size: 85px; font-weight: 900; color: var(--blue); letter-spacing: -4px; margin: 0 0 10px 0; line-height: 1; }
+        
+        /* 경로 텍스트 UI 추가 */
+        .route-info { font-size: 14px; color: var(--orange); font-weight: bold; margin-bottom: 20px; word-break: keep-all; line-height: 1.4; }
         
         .summary-info { font-size: 14px; color: #aaa; font-weight: bold; margin-bottom: 25px; background: #111; border: 1px solid #333; border-radius: 12px; padding: 16px; display: inline-block; line-height: 1.8; text-align: center; width: 80%; }
         .summary-info span { color: var(--green); }
@@ -52,7 +55,7 @@
 
 <div class="container">
     <div id="header-badge">
-        <span class="badge">Master (User Algo)</span>
+        <span class="badge">Master (User A* Algo)</span>
     </div>
 
     <div class="input-box">
@@ -73,11 +76,13 @@
 
     <div id="loader" class="loader-container">
         <div class="loader"></div>
-        <div class="loader-text">A* 알고리즘 역산 중...</div>
+        <div class="loader-text">A* 역산 알고리즘 가동 중...</div>
     </div>
 
     <div id="result" class="result-card">
         <div id="res-door" class="door-time">--:--</div>
+        
+        <div id="res-route" class="route-info"></div>
         
         <div id="res-summary" class="summary-info"></div>
         
@@ -133,7 +138,7 @@
     // c (도보이동시간) 계산 함수
     function calcRealWalkMins(straightDistance) { return Math.ceil((straightDistance * 1.35) / 67); }
 
-    // 차트 플러그인
+    // 차트 플러그인 (스마트 기준선)
     const tempThresholdPlugin = {
         id: 'tempThresholds',
         beforeDraw: (chart) => {
@@ -181,7 +186,7 @@
         }
     };
 
-    // ★ 핵심 함수 1: e (지하철 내 이동시간) 추출
+    // ★ 유저 알고리즘: e (순수 지하철 이동시간) 추출 함수
     async function fetchE(stnName) {
         let e = 15; 
         try {
@@ -189,6 +194,8 @@
             const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/1/상일동/${encodeURIComponent(stnName)}/${dateStr} 12:00:00/1/%20/%20/Y`;
             const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeApi)}`);
             const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
+            
+            // API에서 제공하는 정확한 총 소요시간(shtTravelTm) 추출
             let travelTm = xml.getElementsByTagName("shtTravelTm")[0]?.textContent;
             if (travelTm) e = parseInt(travelTm, 10);
         } catch(err) {}
@@ -226,7 +233,7 @@
                 let name = cleanStationName(doc.place_name); 
                 if (!seen.has(name)) { 
                     seen.add(name); 
-                    // c: 도보시간 계산
+                    // c1, c2, c3 ... 도보시간
                     allStations.push({ name: name, c: calcRealWalkMins(doc.distance) }); 
                 }
             });
@@ -238,254 +245,4 @@
             const c1 = top5[0].c;
             top5 = top5.filter(stn => stn.c < c1 + 15);
 
-            // e값 구하기 및 f = c + e 연산
-            for(let stn of top5) {
-                stn.e = await fetchE(stn.name);
-                stn.f = stn.c + stn.e;
-            }
-
-            // f 기준 정렬 (f'1, f'2...)
-            top5.sort((a,b) => a.f - b.f);
-
-            // 필터 2: f'1 * 1.15 이상의 f'을 가진 역 삭제
-            const f1 = top5[0].f;
-            let validStations = top5.filter(stn => stn.f < f1 * 1.15);
-
-            // ==========================================
-            // 모드 1: 목적지로 모드
-            // ==========================================
-            if (mode === 'A') {
-                // f'1 역 하나만 남김 (H)
-                let H = validStations[0];
-                
-                // 마지노시각 G = A - c
-                let G = A - H.c;
-                // 대략출발 I = G - e
-                let I = G - H.e;
-
-                // I 시각 근처로 스캔하여 최적의 열차 탐색
-                let train = await fetchOptimalTrain(H.name, G, I, H.e);
-                if(!train) throw new Error("배차 응답 오류.");
-
-                // J = 출발 시각, K = 도착 시각 + c, L = c
-                let J = train.depM - CONFIG.MARGIN;
-                let K = train.arrM + H.c;
-                let L = H.c;
-
-                renderFinalResult({ stn: H, J, K, L, train, mode: 'A' });
-            } 
-            // ==========================================
-            // 모드 2: 근처역으로 모드
-            // ==========================================
-            else {
-                let options = [];
-                for(let Hn of validStations) {
-                    // 마지노시각 Gn = A - cn
-                    let Gn = A - Hn.c;
-                    // 대략출발 In = Gn - en
-                    let In = Gn - Hn.e;
-
-                    let train = await fetchOptimalTrain(Hn.name, Gn, In, Hn.e);
-                    if(train) {
-                        let Jn = train.depM - CONFIG.MARGIN;
-                        let Kn = train.arrM; // 2모드 룰: 도착시각 = Kn
-                        let Ln = Hn.c;       // 2모드 룰: cn = Ln
-                        options.push({ stn: Hn, J: Jn, K: Kn, L: Ln, train, mode: 'B' });
-                    }
-                }
-
-                if(options.length === 0) throw new Error("적합한 배차표를 찾을 수 없습니다.");
-                
-                // 필터 3: 제일 늦은 Jn보다 15분 이상 빠른 역 삭제
-                let maxJ = Math.max(...options.map(o => o.J));
-                let finalOptions = options.filter(o => o.J > maxJ - 15);
-                
-                // 역선택 화면 표시
-                document.getElementById('loader').style.display = 'none';
-
-                if (finalOptions.length === 1) {
-                    renderFinalResult(finalOptions[0]);
-                } else {
-                    window.tempOptions = finalOptions;
-                    let html = '';
-                    finalOptions.forEach((opt, idx) => {
-                        html += `<button class="station-btn" onclick="selectOption(${idx})">
-                            <div style="text-align:left;">
-                                <div style="font-size:15px; margin-bottom:4px;"><i class="fas fa-subway"></i> ${opt.stn.name}역</div>
-                                <div style="font-size:12px; color:#aaa;">L (도보이동): ${opt.L}분</div>
-                            </div>
-                            <div style="text-align:right;">
-                                <div style="font-size:11px; color:var(--green); margin-bottom:2px;">Jn (출발시각)</div>
-                                <div style="font-size:18px; font-weight:bold; color:var(--blue);">${minsToHm(opt.J)}</div>
-                            </div>
-                        </button>`;
-                    });
-                    document.getElementById('station-list').innerHTML = html;
-                    document.getElementById('station-selector').style.display = 'block';
-                }
-            }
-        } catch(e) { 
-            document.getElementById('loader').style.display = 'none';
-            alert(e.message); 
-        }
-    }
-
-    // ★ 핵심 함수 2: "I = I - 1분" 역산 알고리즘 100% 반영 스캔 
-    // e값을 인자로 받아 "탑승 = 하차 - e" 로 완벽 계산
-    async function fetchOptimalTrain(stnName, G, I, e) {
-        const d = new Date();
-        const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-        
-        // I 시각 근처로 앞뒤 여유를 두고 검색
-        const offsets = [-20, -10, 0, 10];
-        let allTrains = [];
-
-        for(let off of offsets) {
-            let reqMins = I + off;
-            let reqTimeStr = minsToHm(reqMins) + ':00';
-            
-            let apiUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/5/상일동/${encodeURIComponent(stnName)}/${dateStr} ${reqTimeStr}/1/%20/%20/Y`;
-            try {
-                let res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(apiUrl)}`);
-                let xmlText = await res.text();
-                let xml = new DOMParser().parseFromString(xmlText, "text/xml");
-                
-                let paths = xml.getElementsByTagName("path");
-                for (let j = 0; j < paths.length; j++) {
-                    let arrs = paths[j].getElementsByTagName("trainArvlTm");
-                    if(arrs.length > 0) {
-                        let arr = arrs[arrs.length - 1].textContent;
-                        let arrM = hmToMins(arr);
-                        
-                        // ★ API 에러 원천 차단: 진짜 탑승 시각은 무조건 "하차 시각 - 순수 이동시간(e)"
-                        let depM = arrM - e; 
-                        let dep = minsToHm(depM) + ':00';
-                        
-                        allTrains.push({ dep, arr, arrM, depM });
-                    }
-                }
-            } catch(err) {}
-        }
-
-        let bestTrain = null; 
-        let minDiff = Infinity;
-        if(allTrains.length > 0) {
-            allTrains.forEach(t => {
-                let diff = G - t.arrM; // 도착시각과 마지노시각 G의 차이
-                if(diff < -720) diff += 1440; if(diff > 720) diff -= 1440;
-                
-                // 도착시각이 마지노시각 G보다 같거나 빠르고 (diff >= 0), 가장 바짝 붙은 열차
-                if(diff >= 0 && diff < minDiff) { 
-                    minDiff = diff; 
-                    bestTrain = t; 
-                }
-            });
-        }
-        return bestTrain;
-    }
-
-    function selectOption(idx) {
-        const opt = window.tempOptions[idx];
-        document.getElementById('station-selector').style.display = 'none';
-        renderFinalResult(opt);
-    }
-
-    function renderFinalResult(opt) {
-        document.getElementById('loader').style.display = 'none';
-        document.getElementById('result').style.display = 'block';
-        
-        // 메인: J (출발시각)
-        document.getElementById('res-door').innerText = minsToHm(opt.J);
-        
-        // 텍스트 구조 렌더링 (요청하신 UI 스타일 그대로 적용)
-        if (opt.mode === 'A') {
-            document.getElementById('res-summary').innerHTML = `
-                <div>열차: <span style="color:var(--green)">${opt.train.dep.substring(0,5)}</span> 탑승 ➔ <span style="color:var(--green)">${opt.train.arr.substring(0,5)}</span> 하차</div>
-                <div style="margin-top:8px;">J (출발시각): <span style="color:var(--green)">${minsToHm(opt.J)}</span></div>
-                <div style="margin-top:8px;">K (최종 도착시각): <span style="color:var(--green)">${minsToHm(opt.K)}</span></div>
-                <div style="margin-top:8px;">L (도보이동): <span style="color:var(--green)">${opt.L}분</span></div>
-            `;
-        } else {
-            document.getElementById('res-summary').innerHTML = `
-                <div>열차: <span style="color:var(--green)">${opt.train.dep.substring(0,5)}</span> 탑승 ➔ <span style="color:var(--green)">${opt.train.arr.substring(0,5)}</span> 하차</div>
-                <div style="margin-top:8px;">J (출발시각): <span style="color:var(--green)">${minsToHm(opt.J)}</span></div>
-                <div style="margin-top:8px;">K (역 도착시각): <span style="color:var(--green)">${minsToHm(opt.K)}</span></div>
-                <div style="margin-top:8px;">L (도보이동): <span style="color:var(--green)">${opt.L}분</span></div>
-            `;
-        }
-    }
-
-    async function processKMAWeather(lat, lon, targetH) {
-        const grid = dfs_xy_conv(lat, lon);
-        const baseDate = new Date().toISOString().slice(0,10).replace(/-/g, '');
-        const url = `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${CONFIG.KMA}&numOfRows=1000&pageNo=1&base_date=${baseDate}&base_time=0200&nx=${grid.nx}&ny=${grid.ny}&dataType=JSON`;
-        try {
-            const res = await fetch(url);
-            const data = await res.json();
-            const items = data.response.body.items.item;
-            let hourly = {};
-            items.forEach(i => { if(!hourly[i.fcstTime]) hourly[i.fcstTime]={}; hourly[i.fcstTime][i.category]=i.fcstValue; });
-            const times = Object.keys(hourly).sort().filter(t => parseInt(t.slice(0,2)) >= targetH && parseInt(t.slice(0,2)) <= 22);
-            if(times.length === 0) return;
-            
-            const temps = times.map(t => parseFloat(hourly[t].TMP));
-            const pops = times.map(t => parseInt(hourly[t].POP));
-            const labels = times.map(t=>t.slice(0,2)+'시');
-            
-            const minT = Math.round(Math.min(...temps)); 
-            const maxT = Math.round(Math.max(...temps));
-
-            const rules = [
-                { min: 28, max: 99, label: "28도 이상", text: "민소매, 반팔, 반바지" },
-                { min: 23, max: 27, label: "27도 ~ 23도", text: "반팔, 얇은 셔츠/바지" },
-                { min: 20, max: 22, label: "22도 ~ 20도", text: "긴팔 티셔츠, 얇은 가디건" },
-                { min: 17, max: 19, label: "19도 ~ 17도", text: "얇은 니트, 맨투맨, 가을 자켓" },
-                { min: 12, max: 16, label: "16도 ~ 12도", text: "자켓, 야상, 두꺼운 가디건" },
-                { min: 9, max: 11, label: "11도 ~ 9도", text: "트렌치코트, 야상, 점퍼" },
-                { min: 5, max: 8, label: "8도 ~ 5도", text: "코트, 가죽자켓, 히트텍" },
-                { min: -99, max: 4, label: "4도 이하", text: "패딩, 두꺼운 코트, 방한용품" }
-            ];
-            
-            let recommendations = [];
-            rules.forEach(r => { if (r.min <= maxT && r.max >= minT) recommendations.push(`- <span style="color:var(--orange); font-weight:bold;">${r.label}</span> : ${r.text}`); });
-
-            document.getElementById('w-temp-max').innerText = maxT;
-            document.getElementById('w-temp-min').innerText = minT;
-            document.getElementById('w-clothes').innerHTML = `${recommendations.join('<br>')}`;
-            
-            const yMinTemp = minT - 2;
-            const yMaxTemp = maxT + 2;
-
-            if(tempChart) tempChart.destroy();
-            tempChart = new Chart(document.getElementById('tempChart'), {
-                type: 'line',
-                data: { labels: labels, datasets: [{ data: temps, borderColor: '#ff9f0a', backgroundColor: 'rgba(255,159,10,0.1)', borderWidth: 2, pointBackgroundColor: '#ff9f0a', fill: true, tension: 0.4 }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: yMinTemp, max: yMaxTemp, ticks: {color: '#888'}, grid: {color: '#333'} }, x: { ticks: {color: '#888'}, grid: {display: false} } } },
-                plugins: [tempThresholdPlugin]
-            });
-
-            const popPointColors = pops.map(p => p >= 40 ? '#ff453a' : '#0a84ff');
-            if(rainChart) rainChart.destroy();
-            rainChart = new Chart(document.getElementById('rainChart'), {
-                type: 'line',
-                data: { labels: labels, datasets: [{ data: pops, borderColor: '#0a84ff', backgroundColor: 'rgba(10,132,255,0.1)', borderWidth: 2, pointBackgroundColor: popPointColors, fill: true, tension: 0.4 }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100, ticks: {color: '#888', stepSize: 20}, grid: {color: '#333'} }, x: { ticks: {color: '#888'}, grid: {display: false} } } },
-                plugins: [popThresholdPlugin]
-            });
-        } catch(e) {}
-    }
-
-    function dfs_xy_conv(v1, v2) {
-        const RE = 6371.00877, GRID = 5.0, SLAT1 = 30.0, SLAT2 = 60.0, OLON = 126.0, OLAT = 38.0, XO = 43, YO = 136, DEGRAD = Math.PI / 180.0;
-        const re = RE / GRID, slat1 = SLAT1 * DEGRAD, slat2 = SLAT2 * DEGRAD, olon = OLON * DEGRAD, olat = OLAT * DEGRAD;
-        let sn = Math.log(Math.cos(slat1) / Math.cos(slat2)) / Math.log(Math.tan(Math.PI * 0.25 + slat2 * 0.5) / Math.tan(Math.PI * 0.25 + slat1 * 0.5));
-        let sf = Math.pow(Math.tan(Math.PI * 0.25 + slat1 * 0.5), sn) * Math.cos(slat1) / sn;
-        let ro = re * sf / Math.pow(Math.tan(Math.PI * 0.25 + olat * 0.5), sn);
-        let ra = re * sf / Math.pow(Math.tan(Math.PI * 0.25 + v1 * DEGRAD * 0.5), sn);
-        let theta = v2 * DEGRAD - olon;
-        if (theta > Math.PI) theta -= 2.0 * Math.PI; if (theta < -Math.PI) theta += 2.0 * Math.PI;
-        return { nx: Math.floor(ra * Math.sin(theta * sn) + XO + 0.5), ny: Math.floor(ro - ra * Math.cos(theta * sn) + YO + 0.5) };
-    }
-</script>
-</body>
-</html>
+            // e값 구하기 및 f = c +
