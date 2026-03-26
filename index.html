@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 Premium v45.0</title>
+    <title>S26 Premium v46.0</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -42,7 +42,7 @@
 <div class="container">
     <div class="header">
         <span>S26 <span style="color:#fff;">Premium</span></span>
-        <span class="badge">v45.0</span>
+        <span class="badge">v46.0</span>
     </div>
 
     <div class="input-box">
@@ -83,7 +83,7 @@
         <div id="res-meta" style="font-size: 13px; color: #888; border-top: 1px solid #222; padding-top: 15px; line-height: 1.6;"></div>
     </div>
 
-    <div id="log">시스템 대기 중. (v45.0)</div>
+    <div id="log">시스템 대기 중. (v46.0)</div>
 </div>
 
 <script>
@@ -91,7 +91,6 @@
         KAKAO: '56b6a0adbc28cab6f7c87ac9f84b14d0',
         SEOUL: '597057594f6b696d3438526a7a564e',
         KMA: 'ddfd71d0b929827fd9c3c1851b50c301f9afb482a3143c0b39e135f9b3b8f070',
-        // 사용자님이 발급하신 정확한 프록시 주소 하드코딩 완료
         PROXY: 'https://script.google.com/macros/s/AKfycbxRODYhCj2NupEwxZm7YEigfFM_N_wg5TXUHWGtDvirC_clahAQgx7Z4bT94rJX9fZWtg/exec',
         MARGIN: 10
     };
@@ -112,6 +111,7 @@
         document.getElementById('result').style.display = 'none';
     }
 
+    // 초(seconds) 무시하고 분(minute) 단위까지만 정확히 계산
     function hmToMins(timeStr) {
         let [h, m] = timeStr.split(':').map(Number);
         return h * 60 + m;
@@ -124,7 +124,6 @@
         return `${String(Math.floor(m / 60)).padStart(2,'0')}:${String(m % 60).padStart(2,'0')}`;
     }
 
-    // 이름 정규화
     function cleanStationName(name) {
         return name.split(' ')[0].split('(')[0].replace(/역$/, '').trim();
     }
@@ -177,7 +176,8 @@
                         const d = new Date();
                         const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
                         
-                        const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/1/상일동/${stn.name}/${dateStr} 12:00:00/1/%20/%20/Y`;
+                        // 데이터 잘림 방지를 위해 /1/100/ 적용
+                        const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/100/상일동/${stn.name}/${dateStr} 12:00:00/1/%20/%20/Y`;
                         const probeRes = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeApi)}`);
                         const xml = new DOMParser().parseFromString(await probeRes.text(), "text/xml");
                         
@@ -212,7 +212,7 @@
         } catch(e) { printLog(`❌ 시스템 에러: ${e.message}`, "#ff453a"); }
     }
 
-    // 핵심: 배차표 스캔
+    // 핵심: 끊김 없는 무적 배차표 스캔
     async function findRealTrain(stnName, targetMins, walkMins, placeName, targetTimeStr, subMins) {
         document.getElementById('station-selector').style.display = 'none';
         
@@ -228,26 +228,28 @@
         try {
             printLog(`3. 서울시 서버 접속: [${stnName}] 배차표 정밀 스캔...`);
             
-            const offsets = [-40, -10];
+            // 예상 탑승 시간 기준 -30분, -15분, -1분 지점 타격
+            const offsets = [-30, -15, -1];
             let allTrains = [];
 
             for(let off of offsets) {
                 let reqMins = expectedDepMins + off;
                 let reqTimeStr = minsToHm(reqMins) + ':00';
                 
-                let apiUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/5/상일동/${stnName}/${dateStr} ${reqTimeStr}/1/%20/%20/Y`;
+                // [핵심] /1/100/ 으로 최대 100정거장 풀스캔 보장
+                let apiUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/100/상일동/${stnName}/${dateStr} ${reqTimeStr}/1/%20/%20/Y`;
                 let res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(apiUrl)}`);
                 let xmlText = await res.text();
                 let xml = new DOMParser().parseFromString(xmlText, "text/xml");
                 
-                let paths = xml.getElementsByTagName("path");
-                for(let i=0; i<paths.length; i++) {
-                    let dep = paths[i].getElementsByTagName("trainDptreTm")[0]?.textContent;
-                    let arr = paths[i].getElementsByTagName("trainArvlTm")[paths[i].getElementsByTagName("trainArvlTm").length - 1]?.textContent;
-                    
-                    if(dep && arr) {
-                        allTrains.push({ dep, arr, arrM: hmToMins(arr), depM: hmToMins(dep) });
-                    }
+                // [무적 파싱] 전체 문서에서 가장 처음 출발 시간과 가장 마지막 도착 시간만 깔끔하게 빼옴
+                let deps = xml.getElementsByTagName("trainDptreTm");
+                let arrs = xml.getElementsByTagName("trainArvlTm");
+                
+                if(deps.length > 0 && arrs.length > 0) {
+                    let dep = deps[0].textContent;
+                    let arr = arrs[arrs.length - 1].textContent;
+                    allTrains.push({ dep, arr, arrM: hmToMins(arr), depM: hmToMins(dep) });
                 }
             }
 
@@ -292,14 +294,14 @@
         }
     }
 
-    // 기상청 데이터 처리
+    // 기상청 데이터 처리 (프록시 없이 직통 연결하여 로딩 속도 최적화)
     async function processKMAWeather(lat, lon, targetH) {
         const grid = dfs_xy_conv(lat, lon);
         const baseDate = new Date().toISOString().slice(0,10).replace(/-/g, '');
         const url = `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${CONFIG.KMA}&numOfRows=1000&pageNo=1&base_date=${baseDate}&base_time=0200&nx=${grid.nx}&ny=${grid.ny}&dataType=JSON`;
         
         try {
-            const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(url)}`);
+            const res = await fetch(url);
             const data = await res.json();
             const items = data.response.body.items.item;
             let hourly = {};
