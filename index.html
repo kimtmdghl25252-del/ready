@@ -59,7 +59,7 @@
 
 <div class="container">
     <div id="header-badge">
-        <span class="badge">Master (Odyssey Active)</span>
+        <span class="badge">Master (Double-Encoding Fixed)</span>
     </div>
 
     <div id="error-box"></div>
@@ -205,46 +205,54 @@ const S26App = (function() {
         }
     };
 
-    // ★ 1. 오디세이(swopenapi) 전면 복구: 유저의 진단에 따라 정상 작동하는 오디세이 API 사용
+    // ★ 버그 완벽 조치: V1 시절 100% 정상 작동했던, 날것 그대로의 Template String 방식으로 롤백!
     const fetchSubwayTravelMins = async (stnName) => {
         let e = null; 
         let routeStr = `[경로] 상일동역 탑승 ➔ ${stnName}역 하차`;
         try {
-            // 오디세이 최단경로 API (json/shortestRoute)
-            const url = `http://swopenapi.seoul.go.kr/api/subway/${CONFIG.SEOUL}/json/shortestRoute/0/1/상일동/${encodeURIComponent(stnName)}`;
-            const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(url)}`);
-            const data = await res.json();
+            const dateStr = getKSTDateString();
             
-            if(data.shortestRouteList && data.shortestRouteList.length > 0) {
-                e = parseInt(data.shortestRouteList[0].shtTravelTm, 10);
-                
-                // 환승경로 파싱
-                let msg = data.shortestRouteList[0].shtTransferMsg;
-                if(msg) {
-                    let transfers = msg.split(',').map(s => s.trim().split('역에서')[0] + '역(환승)');
-                    routeStr = `[경로] 상일동역 탑승 ➔ ${transfers.join(' ➔ ')} ➔ ${stnName}역 하차`;
-                }
+            // 어떠한 encodeURI 처리도 섞지 않은 순수한 URL (V1 방식)
+            const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/100/상일동/${stnName}/${dateStr} 12:00:00/1/%20/%20/Y`;
+            
+            // 프록시에 던질 때만 단 한 번 인코딩
+            const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeApi)}`);
+            const xmlText = await res.text();
+            const xml = new DOMParser().parseFromString(xmlText, "text/xml");
+
+            // 순수 지하철 소요 시간 (e) 파싱
+            let travelTmNode = xml.getElementsByTagName("shtTravelTm")[0];
+            if (travelTmNode) {
+                e = parseInt(travelTmNode.textContent, 10);
+            }
+
+            // 경로 문자열 파싱
+            let tMsgs = xml.getElementsByTagName("shtTransferMsg");
+            if (tMsgs.length > 0 && tMsgs[0].textContent) {
+                let msg = tMsgs[0].textContent;
+                let transfers = msg.split(',').map(s => s.trim().split('역에서')[0] + '역(환승)');
+                routeStr = `[경로] 상일동역 탑승 ➔ ${transfers.join(' ➔ ')} ➔ ${stnName}역 하차`;
             }
         } catch(err) {
-            console.warn(`[${stnName}역] 오디세이 파싱 에러:`, err);
+            console.warn(`[${stnName}역] 파싱 에러:`, err);
         }
         
-        if (e === null || isNaN(e)) throw new Error(`[${stnName}역] API 통신 에러`);
+        if (e === null || isNaN(e)) throw new Error(`API 통신 에러`);
         return { subwayTravelMins: e, routeStr };
     };
 
-    // ★ 2. 정부 공공 API(openapi) 통신 에러 100% 방어
+    // 역산 스캔
     const fetchOptimalTrain = async (stnName, latestArrivalAtStation, limitDepMins, subwayTravelMins, routeStr) => {
         const dateStr = getKSTDateString();
         let reqTimeStr = minsToHm(limitDepMins - 30) + ':00'; 
         
-        const rawApiUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/15/상일동/${stnName}/${dateStr} ${reqTimeStr}/1/%20/%20/Y`;
-        const encodedApiUrl = encodeURI(rawApiUrl);
+        // V1 시절 100% 정상 작동했던, 날것 그대로의 Template String 방식
+        let apiUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/100/상일동/${stnName}/${dateStr} ${reqTimeStr}/1/%20/%20/Y`;
 
         let bestTrain = null;
         try {
-            // 정부 API 상태가 불안정하므로 에러가 나면 catch 블록으로 바로 넘어갑니다.
-            let res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(encodedApiUrl)}`);
+            // 프록시에 던질 때만 단 한 번 인코딩
+            let res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(apiUrl)}`);
             let xmlText = await res.text();
             let xml = new DOMParser().parseFromString(xmlText, "text/xml");
             let paths = xml.getElementsByTagName("path");
@@ -255,8 +263,7 @@ const S26App = (function() {
                 let deps = paths[i].getElementsByTagName("trainDptreTm");
                 if (deps.length > 0 && deps[0].textContent) {
                     let depM = hmToMins(deps[0].textContent);
-                    // 유저 절대 수식: 하차 = 탑승 + 순수이동시간 (1분 하차 오류 원천 차단)
-                    let arrM = depM + subwayTravelMins; 
+                    let arrM = depM + subwayTravelMins; // 탑승 = 하차 - e 유저 절대 수식
                     
                     if (arrM <= latestArrivalAtStation && depM > bestDepMins) {
                         bestDepMins = depM;
@@ -271,16 +278,15 @@ const S26App = (function() {
                 }
             }
         } catch(err) {
-            console.warn(`[${stnName}역] 정부 공공 API 서버 다운. 수동 역산 시작.`);
+            console.warn(`[${stnName}역] API 에러. 수동 루프 역산 시작.`);
         }
         
-        // ★ 정부 API 뻗음 완벽 방어: 유저 수식 (I = I - 1) 강제 실행
+        // API 장애 대비용 유저 수동 역산 (I = I - 1 루프) 100% 보장
         if (!bestTrain) {
             let manualDepM = limitDepMins;
             let manualArrM = manualDepM + subwayTravelMins;
             let loopCount = 0;
             
-            // 도착시각이 마지노선을 지킬 때까지 1분씩 완벽 역산
             while (manualArrM > latestArrivalAtStation) {
                 manualDepM -= 1;
                 manualArrM = manualDepM + subwayTravelMins;
@@ -422,6 +428,7 @@ const S26App = (function() {
             const walkMinsFirst = top5[0].walkMins;
             top5 = top5.filter(stn => stn.walkMins < walkMinsFirst + 15);
 
+            // Promise.all 로 속도는 높이고 에러는 개별로 잡음
             const ePromises = top5.map(async (stn) => {
                 try {
                     let routeInfo = await fetchSubwayTravelMins(stn.name);
@@ -448,7 +455,8 @@ const S26App = (function() {
                 let limitDepMins = latestArrivalAtStation - bestStation.subwayTravelMins; 
 
                 let train = await fetchOptimalTrain(bestStation.name, latestArrivalAtStation, limitDepMins, bestStation.subwayTravelMins, bestStation.routeStr);
-                
+                if(!train) throw new Error(`[${bestStation.name}역] 목적 시간에 맞는 열차를 찾을 수 없습니다.`);
+
                 let doorDepartureMins = train.depM - CONFIG.MARGIN;
                 let finalArrivalMins = train.arrM + bestStation.walkMins;
 
@@ -457,8 +465,8 @@ const S26App = (function() {
             else {
                 let options = [];
                 const optionPromises = validStations.map(async (bestStation) => {
-                    let latestArrivalAtStation = targetArrivalMins; 
-                    let limitDepMins = latestArrivalAtStation - bestStation.subwayTravelMins;
+                    let latestArrivalAtStation = targetArrivalMins; // 모드 B: Gn = A
+                    let limitDepMins = latestArrivalAtStation - bestStation.subwayTravelMins; // In = Gn - en
 
                     let train = await fetchOptimalTrain(bestStation.name, latestArrivalAtStation, limitDepMins, bestStation.subwayTravelMins, bestStation.routeStr);
                     if(train) {
