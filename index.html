@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 Premium - Hybrid Engine</title>
+    <title>S26 Premium - Auto Engine v36.0</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         :root { --bg: #000; --card: #151515; --blue: #0a84ff; --green: #30d158; --red: #ff453a; --text: #fff; }
@@ -13,23 +13,19 @@
         .header { font-size: 24px; font-weight: 900; color: var(--blue); margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; }
         .badge { font-size: 10px; background: #333; padding: 4px 8px; border-radius: 6px; color: var(--green); letter-spacing: 1px; }
 
-        .section { background: var(--card); border: 1px solid #333; border-radius: 20px; padding: 20px; margin-bottom: 20px; }
-        .step-title { font-size: 13px; color: var(--blue); margin-bottom: 15px; font-weight: 900; }
+        .input-box { background: var(--card); border: 1px solid #333; border-radius: 20px; padding: 25px; margin-bottom: 20px; }
+        label { display: block; font-size: 12px; color: #888; margin-bottom: 10px; font-weight: bold; }
+        input { width: 100%; background: #000; border: 1px solid #444; border-radius: 12px; padding: 15px; color: #fff; font-size: 16px; box-sizing: border-box; margin-bottom: 15px; outline: none; }
         
-        label { display: block; font-size: 12px; color: #888; margin-bottom: 8px; font-weight: bold; }
-        input { width: 100%; background: #000; border: 1px solid #444; border-radius: 10px; padding: 12px; color: #fff; font-size: 14px; box-sizing: border-box; margin-bottom: 15px; outline: none; }
-        
-        .btn { width: 100%; padding: 15px; border-radius: 12px; border: none; background: var(--blue); color: #fff; font-weight: 900; font-size: 15px; cursor: pointer; transition: 0.2s; margin-bottom: 10px; display: block; text-align: center; text-decoration: none; box-sizing: border-box; }
-        .btn-green { background: var(--green); color: #000; }
-        
-        textarea { width: 100%; height: 80px; background: #000; border: 1px solid #444; border-radius: 10px; padding: 10px; color: #0f0; font-family: monospace; font-size: 11px; box-sizing: border-box; resize: vertical; margin-bottom: 10px; }
+        button { width: 100%; padding: 16px; border-radius: 12px; border: none; background: var(--blue); color: #fff; font-weight: 900; font-size: 16px; cursor: pointer; transition: 0.2s; }
+        button:active { transform: scale(0.98); }
 
-        .result-card { background: linear-gradient(145deg, #1a1a1c, #000); border: 1px solid var(--blue); border-radius: 24px; padding: 30px 20px; text-align: center; display: none; }
-        .door-time { font-size: 70px; font-weight: 900; color: var(--blue); letter-spacing: -3px; line-height: 1; margin: 15px 0; }
+        .result-card { background: linear-gradient(145deg, #1a1a1c, #000); border: 1px solid var(--blue); border-radius: 24px; padding: 35px 20px; text-align: center; display: none; margin-top: 20px; }
+        .door-time { font-size: 80px; font-weight: 900; color: var(--blue); letter-spacing: -3px; line-height: 1; margin: 15px 0; }
         .train-info { font-size: 16px; color: var(--green); font-weight: bold; margin-bottom: 15px; }
         .meta-info { font-size: 13px; color: #777; border-top: 1px solid #222; padding-top: 15px; line-height: 1.6; }
 
-        #log { background: #050505; border: 1px solid #222; padding: 15px; height: 150px; overflow-y: auto; color: #0f0; font-size: 11px; margin-top: 20px; border-radius: 8px; font-family: 'Cascadia Code', monospace; line-height: 1.5; }
+        #log { background: #050505; border: 1px solid #222; padding: 15px; height: 200px; overflow-y: auto; color: #0f0; font-size: 11px; margin-top: 20px; border-radius: 8px; font-family: 'Cascadia Code', monospace; line-height: 1.5; }
     </style>
 </head>
 <body>
@@ -37,41 +33,41 @@
 <div class="container">
     <div class="header">
         <span>S26 <span style="color:#fff;">Premium</span></span>
-        <span class="badge">DEBUG MODE ON</span>
+        <span class="badge">AUTO ENGINE v36</span>
     </div>
 
-    <div class="section">
-        <div class="step-title">STEP 1. 목적지 및 시간 설정</div>
-        <label>도착역 (예: 서울역, 강남)</label>
-        <input type="text" id="dest" value="서울역">
+    <div class="input-box">
+        <label>목표 도착역</label>
+        <input type="text" id="dest" placeholder="예: 서울역" value="서울역">
         
         <div style="display: flex; gap: 10px;">
-            <div style="flex: 1;"><label>조회 날짜</label><input type="date" id="date"></div>
-            <div style="flex: 1;"><label>승강장 도착 기준 시각</label><input type="time" id="time"></div>
+            <div style="flex: 1;">
+                <label>도착 희망 날짜</label>
+                <input type="date" id="date">
+            </div>
+            <div style="flex: 1;">
+                <label>도착 희망 시각</label>
+                <input type="time" id="time" value="14:00">
+            </div>
         </div>
         
-        <p style="font-size: 11px; color: #666; margin-top: 0;">※ 팁: '오후 2시까지 도착'을 원하시면, 소요시간(약 45분)을 고려해 '오후 1시'로 검색하세요.</p>
-        
-        <button class="btn" onclick="generateAndOpenURL()"><i class="fas fa-external-link-alt"></i> 서울시 원본 데이터 뽑기 (새 창)</button>
-    </div>
-
-    <div class="section">
-        <div class="step-title">STEP 2. 데이터 주입 및 시간 역산</div>
-        <textarea id="xml-input" placeholder="새 창에 뜬 알수없는 영어들(XML)을 전체 복사해서 여기에 붙여넣으세요!"></textarea>
-        <button class="btn btn-green" onclick="calculateFromXML()"><i class="fas fa-calculator"></i> 현관문 출발 시간 계산</button>
+        <button onclick="runAutoEngine()"><i class="fas fa-magic"></i> 자동 역산 시작</button>
     </div>
 
     <div id="result" class="result-card">
-        <div style="font-size: 14px; color: #aaa; font-weight: bold;">이 열차를 타기 위한 현관문 출발 시각</div>
+        <div style="font-size: 14px; color: #aaa; font-weight: bold;">이 시각 전까지 도착하려면, 현관문을 나설 시각</div>
         <div id="res-door" class="door-time">--:--</div>
         <div id="res-train" class="train-info"></div>
         <div id="res-meta" class="meta-info"></div>
     </div>
 
-    <div id="log">시스템 준비 완료. STEP 1부터 진행해주세요.</div>
+    <div id="log">시스템 대기 중. 도착 희망 시각을 입력하고 버튼을 누르세요.</div>
 </div>
 
 <script>
+    // ★ 여기에 방금 복사한 구글 웹 앱 URL을 넣으세요! ★
+    const GOOGLE_PROXY_URL = 'https://script.google.com/macros/s/AKfycbxLWndiEwIbdskJSR1kj3_Zj55bee0Dzoi7Pxet1IkWw46L8mhwGxPYUdx2kYx4bgQUXA/exec';
+    
     const KEY = '597057594f6b696d3438526a7a564e';
     const START = "상일동";
     const MARGIN = 10;
@@ -79,106 +75,131 @@
     window.onload = () => {
         const now = new Date();
         document.getElementById('date').value = now.toISOString().slice(0, 10);
-        document.getElementById('time').value = now.toTimeString().slice(0, 5);
     };
 
-    function printLog(msg, type = "") {
+    function printLog(msg, color = "#0f0") {
         const logBox = document.getElementById('log');
-        let color = "#0f0";
-        if (type === "error") color = "var(--red)";
-        if (type === "warning") color = "#ff9f0a";
-        
         const timeStr = new Date().toLocaleTimeString();
         logBox.innerHTML += `<div style="color:${color}; margin-bottom:4px;">[${timeStr}] ${msg}</div>`;
         logBox.scrollTop = logBox.scrollHeight;
     }
 
-    // STEP 1: 완벽한 URL을 생성하고 새 탭으로 여는 함수
-    function generateAndOpenURL() {
+    async function runAutoEngine() {
         const dest = document.getElementById('dest').value.trim();
-        const date = document.getElementById('date').value; // YYYY-MM-DD
-        const time = document.getElementById('time').value; // HH:MM
+        const dateStr = document.getElementById('date').value; 
+        const timeStr = document.getElementById('time').value; 
         
         if (!dest) return alert("도착역을 입력하세요.");
-
-        // API가 요구하는 형식: "2026-03-26 14:00:00" -> 인코딩: "2026-03-26%2014:00:00"
-        const formattedDateTime = `${date} ${time}:00`;
-        const encodedDateTime = encodeURIComponent(formattedDateTime);
-        
-        // 공백(%20)과 대문자 Y를 완벽하게 조합한 최종 주소
-        const targetUrl = `http://openapi.seoul.go.kr:8088/${KEY}/xml/getShtrmPath/1/5/${START}/${dest}/${encodedDateTime}/1/%20/%20/Y`;
-        
-        printLog(`생성된 API 주소: ${targetUrl}`);
-        printLog("새 창에서 서울시 서버로 직접 접속합니다. (CORS 우회 완료)", "warning");
-        
-        window.open(targetUrl, '_blank');
-    }
-
-    // STEP 2: 복사해 온 데이터를 해석하고 계산하는 함수
-    function calculateFromXML() {
-        const xmlText = document.getElementById('xml-input').value.trim();
-        document.getElementById('result').style.display = 'none';
-        printLog("----------------------------------");
-        
-        if (!xmlText) {
-            printLog("오류: 입력된 데이터가 없습니다.", "error");
-            return;
+        if (GOOGLE_PROXY_URL.includes("여기에_복사한_주소_붙여넣기")) {
+            return alert("코드 내부의 GOOGLE_PROXY_URL을 먼저 세팅해주세요!");
         }
 
-        printLog("데이터 구조 분석 시작...");
+        document.getElementById('result').style.display = 'none';
+        document.getElementById('log').innerHTML = "";
+        
+        printLog(`자동화 엔진 가동: 목표 도착 [${dest} / ${timeStr} 까지]`);
 
         try {
+            // [수학적 역산 알고리즘 1단계] 
+            // 도착 희망 시간보다 2시간(120분) 전의 배차표를 검색하여, 
+            // 목적지까지의 정확한 '소요 시간'과 '열차 목록'을 확보합니다.
+            
+            let [targetH, targetM] = timeStr.split(':').map(Number);
+            let targetTotalMins = targetH * 60 + targetM;
+            
+            // 검색 시각 = 목표 시각 - 120분
+            let searchMins = targetTotalMins - 120;
+            if (searchMins < 0) searchMins += 24 * 60; // 자정 넘김 보정
+            let searchH = Math.floor(searchMins / 60);
+            let searchM = searchMins % 60;
+            
+            const searchTimeStr = `${String(searchH).padStart(2,'0')}:${String(searchM).padStart(2,'0')}:00`;
+            const formattedDateTime = `${dateStr} ${searchTimeStr}`;
+            
+            printLog(`알고리즘 1단계: 여유 검색 시점(${searchTimeStr})으로 5개 열차 호출 중...`);
+
+            // 서울시 원본 API URL (검색 개수를 5개로 늘림)
+            const apiUrl = `http://openapi.seoul.go.kr:8088/${KEY}/xml/getShtrmPath/1/5/${START}/${dest}/${encodeURIComponent(formattedDateTime)}/1/%20/%20/Y`;
+            
+            // 구글 프록시를 통한 무적 우회 호출
+            const fetchUrl = `${GOOGLE_PROXY_URL}?url=${encodeURIComponent(apiUrl)}`;
+            
+            const response = await fetch(fetchUrl);
+            const xmlText = await response.text();
+            
+            printLog(`구글 서버 우회 통신 성공! 데이터 파싱 시작.`);
+
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(xmlText, "text/xml");
 
             const resultCode = xmlDoc.getElementsByTagName("resultCode")[0]?.textContent;
-            if (resultCode && resultCode !== "00") {
-                const msg = xmlDoc.getElementsByTagName("resultMsg")[0]?.textContent;
-                throw new Error(`서울시 서버가 거부했습니다: ${msg}`);
+            if (resultCode !== "00") throw new Error(xmlDoc.getElementsByTagName("resultMsg")[0]?.textContent);
+
+            const paths = xmlDoc.getElementsByTagName("path");
+            if (paths.length === 0) throw new Error("해당 조건의 열차 경로를 찾을 수 없습니다.");
+
+            const travelTime = xmlDoc.getElementsByTagName("totalreqHr")[0]?.textContent; // 초 단위일 수 있음
+            const travelMins = Math.ceil(Number(travelTime) / 60);
+            
+            printLog(`목적지까지 소요시간 파악 완료: 약 ${travelMins}분 소요됨.`);
+
+            // [수학적 역산 알고리즘 2단계]
+            // 검색된 열차 목록(path) 중, [열차 도착 시각]이 [사용자 목표 시각]보다 
+            // 작거나 같은(<=) 열차 중 가장 늦은 열차를 선택합니다.
+            
+            let bestTrain = null;
+            let minDiff = Infinity; // 목표시간과 도착시간의 차이 (최소화 해야 함)
+
+            for (let i = 0; i < paths.length; i++) {
+                const p = paths[i];
+                const arrTime = p.getElementsByTagName("trainArvlTm")[0]?.textContent; // "14:48:30"
+                const depTime = p.getElementsByTagName("trainDptreTm")[0]?.textContent;
+                
+                if (!arrTime || !depTime) continue;
+
+                let [aH, aM, aS] = arrTime.split(':').map(Number);
+                let arrTotalMins = aH * 60 + aM;
+                
+                // 목표 시각(targetTotalMins) 안에 들어오는지 확인
+                let diff = targetTotalMins - arrTotalMins;
+                
+                // 음수면 지각. 양수이면서 가장 작은 값(가장 타이트하게 도착하는 열차)을 찾음
+                if (diff >= 0 && diff < minDiff) {
+                    minDiff = diff;
+                    bestTrain = { dep: depTime, arr: arrTime };
+                }
             }
 
-            const trainTimeNode = xmlDoc.getElementsByTagName("trainDptreTm")[0];
-            if (!trainTimeNode || !trainTimeNode.textContent) {
-                throw new Error("<trainDptreTm> 필드가 없습니다. 날짜나 역 이름(예: 서울역)이 정확한지 확인하세요.");
+            if (!bestTrain) {
+                printLog("❌ 오류: 해당 시간 내에 도착할 수 있는 열차가 검색 범위(5개) 내에 없습니다.", "#ff453a");
+                printLog("도착 시간을 더 넉넉하게 잡거나 검색 로직을 수정해야 합니다.", "#ff9f0a");
+                return;
             }
 
-            const trainTime = trainTimeNode.textContent; // 예: "14:04:00"
-            const travelTime = xmlDoc.getElementsByTagName("totalreqHr")[0]?.textContent || "0"; 
-            const destNode = xmlDoc.getElementsByTagName("arvlStn");
-            const finalDest = destNode.length > 0 ? destNode[destNode.length - 1].getElementsByTagName("stnNm")[0]?.textContent : "도착역";
+            printLog(`알고리즘 2단계 성공! 최적의 열차: [${bestTrain.dep} 출발 -> ${bestTrain.arr} 도착] 열차 선택됨.`);
 
-            printLog(`데이터 확인! 실제 열차 출발 시간: ${trainTime}`);
-
-            // 수학적 역산
-            let [h, m, s] = trainTime.split(':').map(Number);
-            let totalMins = (h * 60 + m) - MARGIN;
+            // [수학적 역산 알고리즘 3단계] 마진 10분 빼기
+            let [dH, dM, dS] = bestTrain.dep.split(':').map(Number);
+            let doorTotalMins = (dH * 60 + dM) - MARGIN;
             
-            // 날짜/시간 보정 (음수가 나올 경우 전날로 계산)
-            if (totalMins < 0) totalMins += 24 * 60;
-            
-            let doorH = Math.floor(totalMins / 60);
-            let doorM = totalMins % 60;
+            if (doorTotalMins < 0) doorTotalMins += 24 * 60;
+            let doorH = Math.floor(doorTotalMins / 60);
+            let doorM = doorTotalMins % 60;
 
-            // 결과 출력
+            // 결과 화면 표시
             document.getElementById('result').style.display = 'block';
             document.getElementById('res-door').innerText = `${String(doorH).padStart(2,'0')}:${String(doorM).padStart(2,'0')}`;
-            document.getElementById('res-train').innerText = `상일동역 ${trainTime} 출발 열차 기준`;
-            
-            // 예상 도착 시각 계산 로직
-            let arrMins = (h * 60 + m) + Math.ceil(Number(travelTime) / 60);
-            let arrH = Math.floor(arrMins / 60) % 24;
-            let arrM = arrMins % 60;
-
+            document.getElementById('res-train').innerText = `상일동역 ${bestTrain.dep} 열차 탑승 기준 (-${MARGIN}분 마진)`;
             document.getElementById('res-meta').innerHTML = `
-                <b style="color:#fff;">${START} ➔ ${finalDest}</b><br>
-                목적지 예상 도착 시각: 약 ${String(arrH).padStart(2,'0')}:${String(arrM).padStart(2,'0')}<br>
-                순수 이동 시간: ${Math.ceil(Number(travelTime)/60)}분
+                <b style="color:#fff;">${START} ➔ ${dest}</b><br>
+                서울역 실제 도착 시각: <span style="color:var(--green)">${bestTrain.arr}</span> (목표 ${timeStr} 이전 도착 성공)<br>
+                순수 이동 시간: 약 ${travelMins}분
             `;
-
-            printLog("역산 알고리즘 완료. 결과를 확인하세요.");
+            
+            printLog("전체 시스템 정상 가동. 역산 완료.", "#30d158");
 
         } catch (e) {
-            printLog(`에러 발생: ${e.message}`, "error");
+            printLog(`에러 발생: ${e.message}`, "#ff453a");
         }
     }
 </script>
