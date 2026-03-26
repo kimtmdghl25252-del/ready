@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 Premium v41.0</title>
+    <title>S26 Premium v42.0</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         :root { --bg: #000; --card: #151515; --blue: #0a84ff; --green: #30d158; --red: #ff453a; --text: #fff; }
@@ -35,13 +35,13 @@
 <div class="container">
     <div class="header">
         <span>S26 <span style="color:#fff;">Premium</span></span>
-        <span class="badge">v41.0 USER LOGIC</span>
+        <span class="badge">v42.0 AUTO RECOVERY</span>
     </div>
 
     <div class="input-box">
         <div class="row">
             <div style="flex: 1;"><label>출발역</label><input type="text" id="start" value="상일동"></div>
-            <div style="flex: 1;"><label>도착역</label><input type="text" id="dest" value="군자"></div>
+            <div style="flex: 1;"><label>도착역</label><input type="text" id="dest" value="잠실"></div>
         </div>
         
         <div class="row">
@@ -59,11 +59,12 @@
         <div id="res-meta" class="meta-info"></div>
     </div>
 
-    <div id="log">대기 중... 사용자님의 구글 프록시 연동 완료.</div>
+    <div id="log">대기 중... 환승 에러 우회 시스템 작동 중.</div>
 </div>
 
 <script>
-    const GOOGLE_PROXY = 'https://script.google.com/macros/s/AKfycbxLWndiEwIbdskJSR1kj3_Zj55bee0Dzoi7Pxet1IkWw46L8mhwGxPYUdx2kYx4bgQUXA/exec';
+    // ★ 방금 새로 배포해서 얻은 웹앱 URL을 꼭 여기에 넣어주세요! ★
+    const GOOGLE_PROXY = 'https://script.google.com/macros/s/AKfycbxywKA4LXgeBV3FIovlrYIFHIA645jQjQAhPjxzJ-OQ_wusqxZHeqnUNbw0PGswcKssNA/exec';
     const KEY = '597057594f6b696d3438526a7a564e';
     const MARGIN = 10;
 
@@ -79,11 +80,11 @@
         logBox.scrollTop = logBox.scrollHeight;
     }
 
-    // 시간 계산 헬퍼 함수
     function hmToMins(timeStr) {
         let [h, m] = timeStr.split(':').map(Number);
         return h * 60 + m;
     }
+    
     function minsToHm(mins) {
         let m = Math.round(mins);
         while(m < 0) m += 24 * 60;
@@ -98,23 +99,27 @@
         const timeStr = document.getElementById('time').value; 
         
         if (!start || !dest) return alert("역 이름을 입력하세요.");
+        if (GOOGLE_PROXY.includes("여기에")) return alert("새로 배포한 구글 프록시 주소를 넣어주세요!");
 
         document.getElementById('result').style.display = 'none';
         document.getElementById('log').innerHTML = "";
         
-        printLog(`[알고리즘 시작] ${timeStr} 도착 목표`);
+        printLog(`[알고리즘 시작] ${start} ➔ ${dest} 환승 대비 스캔`);
 
         try {
             let targetMins = hmToMins(timeStr);
             
-            // 1단계: 순수 이동 시간 알아내기
+            // 1단계: 순수 이동 시간 알아내기 (정찰)
             const dummyDate = `${dateStr} 12:00:00`; 
             const probeUrl = `http://openapi.seoul.go.kr:8088/${KEY}/xml/getShtrmPath/1/1/${start}/${dest}/${encodeURIComponent(dummyDate)}/1/%20/%20/Y`;
             
-            printLog("1. 소요 시간 계산 중...");
+            printLog("1. 이동 시간 파악 중...");
             const probeRes = await fetch(`${GOOGLE_PROXY}?url=${encodeURIComponent(probeUrl)}`);
             const probeXml = new DOMParser().parseFromString(await probeRes.text(), "text/xml");
             
+            if (probeXml.getElementsByTagName("CODE")[0]?.textContent === "ERROR-500") {
+                throw new Error("서울시 서버가 해당 경로의 환승 계산을 거부했습니다. (ERROR-500)");
+            }
             if (probeXml.getElementsByTagName("resultCode")[0]?.textContent !== "00") {
                 throw new Error("경로를 찾을 수 없습니다.");
             }
@@ -122,32 +127,39 @@
             const travelMins = Math.ceil(Number(probeXml.getElementsByTagName("totalreqHr")[0]?.textContent) / 60);
             printLog(`> 순수 이동 시간: 약 ${travelMins}분`);
 
-            // 2단계: 마지노선 계산 (목표 시간 - 소요 시간)
             let limitDepMins = targetMins - travelMins;
             let limitTimeStr = minsToHm(limitDepMins);
-            printLog(`2. 마지노선 탑승 시각: [${limitTimeStr}] (이 시간 전에는 무조건 타야 함)`);
+            printLog(`2. 마지노선 탑승 시각: [${limitTimeStr}]`);
 
-            // 3단계: 마지노선 시각 직전의 열차를 찾기 위한 다중 스캔
-            // 마지노선 기준 -30분, -20분, -10분, -5분, -1분 시점에서 각각 검색
+            // 3단계: 5번의 다중 스캔. 하나가 서버 에러로 터져도 나머지가 데이터를 살려옵니다.
             const offsets = [-30, -20, -10, -5, -1];
             const fetchPromises = offsets.map(offset => {
                 let reqMins = limitDepMins + offset;
                 let reqTimeStr = `${minsToHm(reqMins)}:00`;
                 let reqUrl = `http://openapi.seoul.go.kr:8088/${KEY}/xml/getShtrmPath/1/1/${start}/${dest}/${encodeURIComponent(`${dateStr} ${reqTimeStr}`)}/1/%20/%20/Y`;
-                return fetch(`${GOOGLE_PROXY}?url=${encodeURIComponent(reqUrl)}`).then(r => r.text());
+                
+                return fetch(`${GOOGLE_PROXY}?url=${encodeURIComponent(reqUrl)}`)
+                    .then(r => r.text())
+                    .catch(e => {
+                        printLog(`[경고] 통신 오류 발생 (무시됨)`, "#ff9f0a");
+                        return null; // 에러나도 앱이 죽지 않게 막음
+                    });
             });
 
-            printLog("3. 서울시 서버에서 열차 데이터 수집 중...");
+            printLog("3. 서울시 서버 다중 스캔 중 (환승 렉 방어 모드)...");
             const results = await Promise.all(fetchPromises);
-            let trainMap = new Map(); // 중복 제거용
+            let trainMap = new Map(); 
 
             results.forEach(xmlText => {
+                if (!xmlText) return; // 에러 난 데이터 스킵
+                
                 let xmlDoc = new DOMParser().parseFromString(xmlText, "text/xml");
+                if (xmlDoc.getElementsByTagName("CODE")[0]?.textContent === "ERROR-500") {
+                    return; // 환승 계산 터진 시간대 데이터 스킵
+                }
+
                 let paths = xmlDoc.getElementsByTagName("path");
                 
-                // [치명적 버그 수정] paths는 정거장 목록임. 
-                // 출발역 출발 시간 = 첫 번째 path의 trainDptreTm
-                // 목적지 도착 시간 = 마지막 path의 trainArvlTm
                 if (paths.length > 0) {
                     let dep = paths[0].getElementsByTagName("trainDptreTm")[0]?.textContent;
                     let arr = paths[paths.length - 1].getElementsByTagName("trainArvlTm")[0]?.textContent;
@@ -159,9 +171,9 @@
             });
 
             let allTrains = Array.from(trainMap.values());
-            if (allTrains.length === 0) throw new Error("배차 데이터를 불러오지 못했습니다.");
+            if (allTrains.length === 0) throw new Error("서울시 서버가 환승 데이터를 하나도 주지 않았습니다. 잠시 후 다시 시도하세요.");
 
-            // 4단계: 마지노선 시각을 넘기지 않는 가장 늦은 열차 탐색
+            // 4단계: 마지노선 이전 최후의 열차 찾기
             let bestTrain = null;
             let minDiff = Infinity; 
 
@@ -170,7 +182,6 @@
                 if (diff < -12 * 60) diff += 24 * 60;
                 if (diff > 12 * 60) diff -= 24 * 60;
 
-                // 마지노선 이전(diff >= 0)이면서, 차이가 가장 적은 열차
                 if (diff >= 0 && diff < minDiff) {
                     minDiff = diff;
                     bestTrain = t;
@@ -178,25 +189,25 @@
             });
 
             if (!bestTrain) {
-                throw new Error(`[${limitTimeStr}] 이전에 출발하는 열차를 찾을 수 없습니다.`);
+                throw new Error(`[${limitTimeStr}] 이전에 출발하는 열차를 찾지 못했습니다.`);
             }
 
-            printLog(`✅ 완료: 마지노선(${limitTimeStr})을 넘기지 않는 가장 늦은 열차는 [${bestTrain.dep}] 입니다!`);
+            printLog(`✅ 스캔 성공! 생존한 데이터 중 최적 열차: [${bestTrain.dep}]`);
 
-            // 5단계: 현관문 나설 시간 계산 (열차 출발 - 10분 마진)
+            // 5단계: 마진 역산
             let doorTimeStr = minsToHm(bestTrain.depMins - MARGIN);
 
             // UI 렌더링
             document.getElementById('result').style.display = 'block';
             document.getElementById('res-door').innerText = doorTimeStr;
-            document.getElementById('res-train').innerText = `${start}역 ${bestTrain.dep} 열차 탑승 기준 (-${MARGIN}분 마진)`;
+            document.getElementById('res-train').innerText = `${start}역 ${bestTrain.dep} 출발 열차 기준 (-${MARGIN}분 마진)`;
             document.getElementById('res-meta').innerHTML = `
                 <b style="color:#fff;">${start} ➔ ${dest}</b><br>
                 마지노선 시각: ${limitTimeStr} (순수 이동: ${travelMins}분)<br>
-                목적지 도착 예정: <span style="color:var(--green)">${bestTrain.arr}</span>
+                최종 도착 예정: <span style="color:var(--green)">${bestTrain.arr}</span>
             `;
             
-            printLog("모든 계산 및 UI 바인딩 완료.", "#30d158");
+            printLog("환승 방어 성공 및 UI 바인딩 완료.", "#30d158");
 
         } catch (e) {
             printLog(`❌ 에러: ${e.message}`, "#ff453a");
