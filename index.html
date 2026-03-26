@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 Premium v40.0</title>
+    <title>S26 Premium v41.0</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         :root { --bg: #000; --card: #151515; --blue: #0a84ff; --green: #30d158; --red: #ff453a; --text: #fff; }
@@ -35,18 +35,18 @@
 <div class="container">
     <div class="header">
         <span>S26 <span style="color:#fff;">Premium</span></span>
-        <span class="badge">v40.0 PERFECT LOGIC</span>
+        <span class="badge">v41.0 USER LOGIC</span>
     </div>
 
     <div class="input-box">
         <div class="row">
             <div style="flex: 1;"><label>출발역</label><input type="text" id="start" value="상일동"></div>
-            <div style="flex: 1;"><label>도착역</label><input type="text" id="dest" value="고덕"></div>
+            <div style="flex: 1;"><label>도착역</label><input type="text" id="dest" value="군자"></div>
         </div>
         
         <div class="row">
             <div style="flex: 1;"><label>목표 날짜</label><input type="date" id="date"></div>
-            <div style="flex: 1;"><label>목표 도착 시각</label><input type="time" id="time" value="10:00"></div>
+            <div style="flex: 1;"><label>목표 도착 시각</label><input type="time" id="time" value="14:00"></div>
         </div>
         
         <button onclick="runPerfectEngine()"><i class="fas fa-magic"></i> 완벽한 역산 시작</button>
@@ -63,7 +63,6 @@
 </div>
 
 <script>
-    // 사용자님이 만들어주신 구글 무적 프록시 적용 완료
     const GOOGLE_PROXY = 'https://script.google.com/macros/s/AKfycbxLWndiEwIbdskJSR1kj3_Zj55bee0Dzoi7Pxet1IkWw46L8mhwGxPYUdx2kYx4bgQUXA/exec';
     const KEY = '597057594f6b696d3438526a7a564e';
     const MARGIN = 10;
@@ -80,6 +79,18 @@
         logBox.scrollTop = logBox.scrollHeight;
     }
 
+    // 시간 계산 헬퍼 함수
+    function hmToMins(timeStr) {
+        let [h, m] = timeStr.split(':').map(Number);
+        return h * 60 + m;
+    }
+    function minsToHm(mins) {
+        let m = Math.round(mins);
+        while(m < 0) m += 24 * 60;
+        m = m % (24 * 60);
+        return `${String(Math.floor(m / 60)).padStart(2,'0')}:${String(m % 60).padStart(2,'0')}`;
+    }
+
     async function runPerfectEngine() {
         const start = document.getElementById('start').value.trim();
         const dest = document.getElementById('dest').value.trim();
@@ -91,11 +102,10 @@
         document.getElementById('result').style.display = 'none';
         document.getElementById('log').innerHTML = "";
         
-        printLog(`[알고리즘 시작] 목표: ${timeStr} 도착`);
+        printLog(`[알고리즘 시작] ${timeStr} 도착 목표`);
 
         try {
-            let [tH, tM] = timeStr.split(':').map(Number);
-            let targetTotalMins = tH * 60 + tM;
+            let targetMins = hmToMins(timeStr);
             
             // 1단계: 순수 이동 시간 알아내기
             const dummyDate = `${dateStr} 12:00:00`; 
@@ -110,58 +120,57 @@
             }
             
             const travelMins = Math.ceil(Number(probeXml.getElementsByTagName("totalreqHr")[0]?.textContent) / 60);
-            printLog(`> 약 ${travelMins}분 소요 예정`);
+            printLog(`> 순수 이동 시간: 약 ${travelMins}분`);
 
-            // 2단계: 사용자님 로직 (마지노선 출발 시각 = 목표 시각 - 소요 시간)
-            let limitDepMins = targetTotalMins - travelMins;
-            if (limitDepMins < 0) limitDepMins += 24 * 60;
-            let limitH = Math.floor(limitDepMins / 60);
-            let limitM = limitDepMins % 60;
-            let limitTimeStr = `${String(limitH).padStart(2,'0')}:${String(limitM).padStart(2,'0')}`;
-            
+            // 2단계: 마지노선 계산 (목표 시간 - 소요 시간)
+            let limitDepMins = targetMins - travelMins;
+            let limitTimeStr = minsToHm(limitDepMins);
             printLog(`2. 마지노선 탑승 시각: [${limitTimeStr}] (이 시간 전에는 무조건 타야 함)`);
 
-            // 3단계: 마지노선 시각 이전의 배차표를 확실하게 가져오기 위해,
-            // 마지노선 시각 기준 -45분, -30분, -15분, 정각 이렇게 4번 폭격하여 열차를 긁어옵니다.
-            const offsets = [-45, -30, -15, 0];
+            // 3단계: 마지노선 시각 직전의 열차를 찾기 위한 다중 스캔
+            // 마지노선 기준 -30분, -20분, -10분, -5분, -1분 시점에서 각각 검색
+            const offsets = [-30, -20, -10, -5, -1];
             const fetchPromises = offsets.map(offset => {
                 let reqMins = limitDepMins + offset;
-                if (reqMins < 0) reqMins += 24 * 60;
-                let reqTimeStr = `${String(Math.floor(reqMins/60)%24).padStart(2,'0')}:${String(reqMins%60).padStart(2,'0')}:00`;
-                let reqUrl = `http://openapi.seoul.go.kr:8088/${KEY}/xml/getShtrmPath/1/5/${start}/${dest}/${encodeURIComponent(`${dateStr} ${reqTimeStr}`)}/1/%20/%20/Y`;
+                let reqTimeStr = `${minsToHm(reqMins)}:00`;
+                let reqUrl = `http://openapi.seoul.go.kr:8088/${KEY}/xml/getShtrmPath/1/1/${start}/${dest}/${encodeURIComponent(`${dateStr} ${reqTimeStr}`)}/1/%20/%20/Y`;
                 return fetch(`${GOOGLE_PROXY}?url=${encodeURIComponent(reqUrl)}`).then(r => r.text());
             });
 
             printLog("3. 서울시 서버에서 열차 데이터 수집 중...");
             const results = await Promise.all(fetchPromises);
-            let allTrains = [];
+            let trainMap = new Map(); // 중복 제거용
 
             results.forEach(xmlText => {
                 let xmlDoc = new DOMParser().parseFromString(xmlText, "text/xml");
                 let paths = xmlDoc.getElementsByTagName("path");
-                for(let i = 0; i < paths.length; i++) {
-                    let dep = paths[i].getElementsByTagName("trainDptreTm")[0]?.textContent;
-                    let arr = paths[i].getElementsByTagName("trainArvlTm")[0]?.textContent;
-                    if(dep) allTrains.push({dep, arr});
+                
+                // [치명적 버그 수정] paths는 정거장 목록임. 
+                // 출발역 출발 시간 = 첫 번째 path의 trainDptreTm
+                // 목적지 도착 시간 = 마지막 path의 trainArvlTm
+                if (paths.length > 0) {
+                    let dep = paths[0].getElementsByTagName("trainDptreTm")[0]?.textContent;
+                    let arr = paths[paths.length - 1].getElementsByTagName("trainArvlTm")[0]?.textContent;
+                    
+                    if (dep && arr) {
+                        trainMap.set(dep, { dep, arr, depMins: hmToMins(dep) });
+                    }
                 }
             });
 
+            let allTrains = Array.from(trainMap.values());
             if (allTrains.length === 0) throw new Error("배차 데이터를 불러오지 못했습니다.");
 
-            // 4단계: 긁어온 열차 중 "출발 시간이 마지노선(limitDepMins) 이하이면서 가장 큰(늦은) 열차" 찾기
+            // 4단계: 마지노선 시각을 넘기지 않는 가장 늦은 열차 탐색
             let bestTrain = null;
-            let minDiff = Infinity; // 마지노선과 열차 출발 시간의 차이 (0에 가까울수록 베스트)
+            let minDiff = Infinity; 
 
             allTrains.forEach(t => {
-                let [dH, dM] = t.dep.split(':').map(Number);
-                let trainDepMins = dH * 60 + dM;
-                
-                let diff = limitDepMins - trainDepMins;
-                // 자정 넘어가는 시간 계산 보정
+                let diff = limitDepMins - t.depMins;
                 if (diff < -12 * 60) diff += 24 * 60;
                 if (diff > 12 * 60) diff -= 24 * 60;
 
-                // 출발 시간이 마지노선보다 이전(diff >= 0)이면서 차이가 가장 적은 것
+                // 마지노선 이전(diff >= 0)이면서, 차이가 가장 적은 열차
                 if (diff >= 0 && diff < minDiff) {
                     minDiff = diff;
                     bestTrain = t;
@@ -174,25 +183,20 @@
 
             printLog(`✅ 완료: 마지노선(${limitTimeStr})을 넘기지 않는 가장 늦은 열차는 [${bestTrain.dep}] 입니다!`);
 
-            // 5단계: 현관문 나설 시간 계산 (열차 출발시간 - 10분 마진)
-            let [bdH, bdM] = bestTrain.dep.split(':').map(Number);
-            let doorTotalMins = (bdH * 60 + bdM) - MARGIN;
-            if (doorTotalMins < 0) doorTotalMins += 24 * 60;
-            
-            let doorH = Math.floor(doorTotalMins / 60);
-            let doorM = doorTotalMins % 60;
+            // 5단계: 현관문 나설 시간 계산 (열차 출발 - 10분 마진)
+            let doorTimeStr = minsToHm(bestTrain.depMins - MARGIN);
 
             // UI 렌더링
             document.getElementById('result').style.display = 'block';
-            document.getElementById('res-door').innerText = `${String(doorH).padStart(2,'0')}:${String(doorM).padStart(2,'0')}`;
-            document.getElementById('res-train').innerText = `상일동역 ${bestTrain.dep} 열차 탑승 기준 (-${MARGIN}분 마진)`;
+            document.getElementById('res-door').innerText = doorTimeStr;
+            document.getElementById('res-train').innerText = `${start}역 ${bestTrain.dep} 열차 탑승 기준 (-${MARGIN}분 마진)`;
             document.getElementById('res-meta').innerHTML = `
                 <b style="color:#fff;">${start} ➔ ${dest}</b><br>
                 마지노선 시각: ${limitTimeStr} (순수 이동: ${travelMins}분)<br>
                 목적지 도착 예정: <span style="color:var(--green)">${bestTrain.arr}</span>
             `;
             
-            printLog("결과 출력 완료.", "#30d158");
+            printLog("모든 계산 및 UI 바인딩 완료.", "#30d158");
 
         } catch (e) {
             printLog(`❌ 에러: ${e.message}`, "#ff453a");
