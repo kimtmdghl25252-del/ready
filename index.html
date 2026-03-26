@@ -210,15 +210,17 @@
         }
     }
 
-    // TMAP 엔진 핵심 로직
+// TMAP 엔진 핵심 로직
     async function getTmapRoute(endX, endY) {
-        const tmapUrl = `https://apis.openapi.sk.com/tmap/transit/routes?format=json`;
+        // [수정 1] URL에서 '/tmap' 제거 (정식 API 주소)
+        const tmapUrl = `https://apis.openapi.sk.com/transit/routes`;
         const proxyUrl = `${CONFIG.PROXY}?url=${encodeURIComponent(tmapUrl)}`;
         
-        // TMAP은 POST 방식으로 위경도를 넘깁니다.
+        // [수정 2] format과 lang 필수 파라미터 추가
         const body = {
             startX: CONFIG.START_X, startY: CONFIG.START_Y,
-            endX: endX.toString(), endY: endY.toString(), count: 5
+            endX: endX.toString(), endY: endY.toString(), 
+            count: 5, format: "json", lang: 0
         };
 
         const res = await fetch(proxyUrl, {
@@ -227,10 +229,17 @@
         });
         
         const data = await res.json();
-        if(!data.metaData || !data.metaData.plan.itineraries) throw new Error("TMAP 경로를 찾을 수 없습니다.");
+        
+        // 에러 상세 추적용
+        if (data.error) throw new Error(`TMAP 거부: ${data.error.message}`);
+        if (!data.metaData || !data.metaData.plan.itineraries) {
+            console.log("TMAP 응답 원본:", data);
+            throw new Error("경로 데이터를 받을 수 없습니다.");
+        }
+        
         return data.metaData.plan.itineraries;
     }
-
+    
     async function startEngine() {
         const dest = document.getElementById('dest').value.trim();
         const targetTime = document.getElementById('time').value;
