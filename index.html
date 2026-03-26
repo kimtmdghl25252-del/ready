@@ -3,87 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 Premium v53.0</title>
+    <title>S26 Premium</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --bg: #000; --card: #151515; --blue: #0a84ff; --green: #30d158; --red: #ff453a; --text: #fff; --orange: #ff9f0a; --purple: #bf5af2; }
         body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; padding-bottom: 50px; }
-        .header { font-size: 24px; font-weight: 900; color: var(--blue); margin-bottom: 25px; display: flex; align-items: center; justify-content: space-between; }
-        .badge { font-size: 10px; background: #333; padding: 4px 8px; border-radius: 6px; color: var(--purple); letter-spacing: 1px; }
+        
+        /* 뱃지 우측 정렬 */
+        .header-badge { text-align: right; margin-bottom: 15px; }
+        .badge { font-size: 11px; background: #222; padding: 6px 10px; border-radius: 8px; color: var(--purple); font-weight: bold; letter-spacing: 1px; }
+        
         .input-box { background: var(--card); border: 1px solid #333; border-radius: 20px; padding: 25px; margin-bottom: 20px; }
-        label { display: block; font-size: 12px; color: #888; margin-bottom: 8px; font-weight: bold; }
-        input[type="text"], input[type="time"] { width: 100%; background: #000; border: 1px solid #444; border-radius: 12px; padding: 15px; color: #fff; font-size: 16px; box-sizing: border-box; margin-bottom: 20px; outline: none; font-weight: bold; }
+        input[type="text"], input[type="time"] { width: 100%; background: #000; border: 1px solid #444; border-radius: 12px; padding: 18px; color: #fff; font-size: 18px; box-sizing: border-box; margin-bottom: 20px; outline: none; font-weight: bold; text-align: center; }
         
         .radio-group { display: flex; gap: 10px; margin-bottom: 20px; }
-        .radio-label { flex: 1; text-align: center; background: #000; border: 1px solid #444; border-radius: 12px; padding: 12px; color: #aaa; font-size: 13px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .radio-label { flex: 1; text-align: center; background: #000; border: 1px solid #444; border-radius: 12px; padding: 15px; color: #aaa; font-size: 14px; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .radio-label.active { background: var(--blue); color: #fff; border-color: var(--blue); }
         input[type="radio"] { display: none; }
 
-        button { width: 100%; padding: 18px; border-radius: 14px; border: none; background: var(--blue); color: #fff; font-weight: 900; font-size: 16px; cursor: pointer; transition: 0.2s; }
+        button { width: 100%; padding: 20px; border-radius: 14px; border: none; background: var(--blue); color: #fff; font-weight: 900; font-size: 18px; cursor: pointer; transition: 0.2s; }
         
         #station-selector { display: none; margin-bottom: 20px; }
         .station-btn { background: #222; border: 1px solid #444; color: #fff; padding: 15px; margin-bottom: 10px; border-radius: 12px; text-align: left; display: flex; justify-content: space-between; align-items: center; width: 100%; cursor: pointer; border-left: 4px solid var(--purple); }
         
-        .result-card { background: linear-gradient(145deg, #1a1a1c, #000); border: 1px solid var(--blue); border-radius: 24px; padding: 30px 20px; text-align: center; display: none; margin-top: 20px; }
-        .door-time { font-size: 75px; font-weight: 900; color: var(--blue); letter-spacing: -3px; margin: 15px 0; }
-        .train-info { font-size: 16px; color: var(--green); font-weight: bold; margin-bottom: 20px; }
+        .result-card { background: linear-gradient(145deg, #1a1a1c, #000); border: 1px solid var(--blue); border-radius: 24px; padding: 40px 20px; text-align: center; display: none; margin-top: 20px; }
+        .door-time { font-size: 90px; font-weight: 900; color: var(--blue); letter-spacing: -4px; margin: 0 0 10px 0; line-height: 1; }
+        .train-info { font-size: 28px; color: var(--blue); font-weight: 900; margin-bottom: 30px; letter-spacing: -1px; }
         
-        .weather-box { background: rgba(255,255,255,0.05); border-radius: 16px; padding: 20px; margin-bottom: 20px; text-align: left; border: 1px solid #333; }
-        .w-header { font-size: 14px; color: var(--orange); font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 10px; }
-        .chart-container { position: relative; height: 150px; width: 100%; margin-top: 15px; }
+        .weather-box { background: rgba(255,255,255,0.03); border-radius: 16px; padding: 25px 20px; margin-bottom: 20px; text-align: left; border: 1px solid #222; }
+        .chart-container { position: relative; height: 140px; width: 100%; margin-top: 25px; }
 
-        #log { background: #050505; border: 1px solid #222; padding: 15px; height: 180px; overflow-y: auto; color: #0f0; font-size: 11px; margin-top: 20px; border-radius: 12px; font-family: 'Cascadia Code', monospace; line-height: 1.5; }
+        #res-meta { font-size: 14px; color: #aaa; border-top: 1px solid #222; padding-top: 20px; line-height: 1.8; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div class="header">
-        <span>S26 <span style="color:#fff;">Premium</span></span>
-        <span class="badge">v53.0</span>
+    <div class="header-badge">
+        <span class="badge">v54.0</span>
     </div>
 
     <div class="input-box">
-        <label>경로 탐색 모드</label>
         <div class="radio-group">
-            <label class="radio-label active" id="label-A"><input type="radio" name="mode" value="A" checked onchange="toggleMode()"> 목적지로 (최단시간 자동)</label>
-            <label class="radio-label" id="label-B"><input type="radio" name="mode" value="B" onchange="toggleMode()"> 근처역으로 (스마트 필터링)</label>
+            <label class="radio-label active" id="label-A"><input type="radio" name="mode" value="A" checked onchange="toggleMode()"> 목적지로</label>
+            <label class="radio-label" id="label-B"><input type="radio" name="mode" value="B" onchange="toggleMode()"> 근처역으로</label>
         </div>
 
-        <label>최종 목적지 (출발: 상일동역 고정)</label>
-        <input type="text" id="dest" value="천호보건지소">
-        
-        <label>목표 도착 시각 (24H)</label>
+        <input type="text" id="dest" value="천호보건지소" placeholder="최종 목적지 입력">
         <input type="time" id="time" value="22:02">
         
         <button onclick="startEngine()"><i class="fas fa-route"></i> 최적 경로 연산 시작</button>
     </div>
 
     <div id="station-selector">
-        <label style="color:var(--purple); font-size:14px; margin-bottom:10px; display:block;">도착 목표 시간에 맞는 추천 역 (출발 시각 기준)</label>
         <div id="station-list"></div>
     </div>
 
     <div id="result" class="result-card">
-        <div style="font-size: 14px; color: #aaa; font-weight: bold;">현관문을 나서야 할 시각</div>
         <div id="res-door" class="door-time">--:--</div>
-        <div id="res-train" class="train-info"></div>
+        <div id="res-train" class="train-info">--:--</div>
         
         <div id="res-weather" class="weather-box">
-            <div class="w-header"><i class="fas fa-temperature-high"></i> 목적지 온도 스펙트럼 & 코디</div>
             <div id="w-temp" style="font-size: 16px; font-weight: bold; color: #fff;"></div>
             <div id="w-clothes" style="font-size:13px; color:#ddd; margin-top:10px; line-height:1.6;"></div>
-            
-            <div class="w-header" style="margin-top:20px; font-size:13px; color:var(--blue); border:none;"><i class="fas fa-umbrella"></i> 목적지 강수 확률 (40% 이상 경고)</div>
             <div class="chart-container"><canvas id="rainChart"></canvas></div>
         </div>
 
-        <div id="res-meta" style="font-size: 13px; color: #888; border-top: 1px solid #222; padding-top: 15px; line-height: 1.6;"></div>
+        <div id="res-meta"></div>
     </div>
-
-    <div id="log">대기 중... 모드 B 도보시간 연산 분리 완료 (v53.0)</div>
 </div>
 
 <script>
@@ -98,10 +87,9 @@
     let rainChart = null;
     window.tempOptions = [];
 
-    function printLog(msg, color = "#0f0") {
-        const log = document.getElementById('log');
-        log.innerHTML += `<div style="color:${color}; margin-bottom:4px;">> ${msg}</div>`;
-        log.scrollTop = log.scrollHeight;
+    // UI 클린업: 화면 하단 로그 대신 개발자 도구 콘솔에만 출력되도록 변경
+    function printLog(msg) {
+        console.log(`[S26 Engine] ${msg}`);
     }
 
     function toggleMode() {
@@ -139,11 +127,10 @@
 
         document.getElementById('result').style.display = 'none';
         document.getElementById('station-selector').style.display = 'none';
-        document.getElementById('log').innerHTML = "";
         window.tempOptions = [];
 
         try {
-            printLog("1. 카카오 API 목적지 스캔...");
+            printLog("카카오 API 목적지 스캔...");
             const kRes = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(dest)}`, {
                 headers: { Authorization: `KakaoAK ${CONFIG.KAKAO}` }
             });
@@ -154,7 +141,7 @@
             
             processKMAWeather(destY, destX, parseInt(targetTime.split(':')[0]));
 
-            printLog("2. 주변 지하철역 스캔 및 도보 시간 확보...");
+            printLog("주변 지하철역 스캔 및 도보 시간 확보...");
             const sRes = await fetch(`https://dapi.kakao.com/v2/local/search/category.json?category_group_code=SW8&x=${destX}&y=${destY}&radius=2000&sort=distance`, {
                 headers: { Authorization: `KakaoAK ${CONFIG.KAKAO}` }
             });
@@ -170,19 +157,14 @@
                 }
             });
 
-            let walk15Stations = allStations.filter(s => s.walk <= 15);
             const targetMins = hmToMins(targetTime);
 
-            // [조건 1] 모드 A 이거나 15분 이내 역이 없거나 1개일 때 -> 전체 역 중 최단시간 탐색 (자동)
-            if (mode === 'A' || walk15Stations.length <= 1) {
-                if (mode === 'B') printLog(`[조건 감지] 15분 이내 역이 1개 이하이므로 모드 A(최단경로 자동)로 전환합니다.`, "#bf5af2");
-                else printLog(`[모드 A] 지하철+도보 합산 최단 경로 연산...`);
-                
-                let topStations = allStations.slice(0, 3);
+            if (mode === 'A') {
                 let bestRoute = null;
                 let minTotalMins = Infinity;
 
-                for(let stn of topStations) {
+                for(let i=0; i<Math.min(3, allStations.length); i++) {
+                    let stn = allStations[i];
                     let subMins = 30; 
                     try {
                         const d = new Date();
@@ -202,27 +184,25 @@
                     }
                 }
 
-                // 모드 A의 마지노선은 도보시간을 차감합니다.
-                const limitMins = targetMins - bestRoute.walk;
-                let train = await fetchRealTrainSilent(bestRoute.name, limitMins, bestRoute.subMins);
+                if(!bestRoute) throw new Error("경로를 연산할 수 없습니다.");
+
+                const limitMinsA = targetMins - bestRoute.walk;
+                let train = await fetchRealTrainSilent(bestRoute.name, limitMinsA, bestRoute.subMins);
                 
                 if(train) {
-                    renderFinalResult({ stn: bestRoute, c: limitMins, d: train.depM, train: train, placeName, targetTime, routeMode: 'A' });
+                    renderFinalResult({ stn: bestRoute, c: limitMinsA, d: train.depM, train: train, placeName, targetTime, routeMode: 'A' });
                 } else {
-                    throw new Error("서버 배차 응답 오류로 경로를 생성할 수 없습니다.");
+                    throw new Error("서버 배차 응답 오류.");
                 }
 
-            } 
-            // [조건 2] 모드 B 이면서 15분 이내 역이 2개 이상일 때
-            else {
-                printLog(`[모드 B] 역 ${walk15Stations.length}개 대상, 목표 시각 도착 기준 스캔 시작...`);
-                let validOptions = [];
-
-                for(let stn of walk15Stations.slice(0, 4)) { 
+            } else {
+                let walk15Stations = allStations.filter(s => s.walk <= 15);
+                
+                if (walk15Stations.length <= 1) {
+                    let stn = allStations[0];
                     let subMins = 30; 
                     try {
-                        const d = new Date();
-                        const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                        const dateStr = new Date().toISOString().slice(0,10);
                         const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/100/상일동/${stn.name}/${dateStr} 12:00:00/1/%20/%20/Y`;
                         const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeApi)}`);
                         const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
@@ -230,46 +210,63 @@
                             subMins = Math.ceil(Number(xml.getElementsByTagName("totalreqHr")[0]?.textContent) / 60);
                         }
                     } catch(e) {}
-
-                    // ★ [핵심 픽스] 모드 B에서는 도보시간을 빼지 않고, targetMins를 그대로 마지노선으로 사용합니다.
-                    let limitMins = targetMins; 
-                    let train = await fetchRealTrainSilent(stn.name, limitMins, subMins); 
                     
-                    if(train) {
-                        validOptions.push({ stn: stn, c: limitMins, d: train.depM, train: train, placeName, targetTime, routeMode: 'B' });
+                    const limitMins = targetMins - stn.walk;
+                    let train = await fetchRealTrainSilent(stn.name, limitMins, subMins);
+                    if(train) renderFinalResult({ stn: stn, c: limitMins, d: train.depM, train: train, placeName, targetTime, routeMode: 'A' });
+                    
+                } else {
+                    let validOptions = [];
+
+                    for(let stn of walk15Stations.slice(0, 4)) {
+                        let subMins = 30; 
+                        try {
+                            const dateStr = new Date().toISOString().slice(0,10);
+                            const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/100/상일동/${stn.name}/${dateStr} 12:00:00/1/%20/%20/Y`;
+                            const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeApi)}`);
+                            const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
+                            if (xml.getElementsByTagName("resultCode")[0]?.textContent === "00") {
+                                subMins = Math.ceil(Number(xml.getElementsByTagName("totalreqHr")[0]?.textContent) / 60);
+                            }
+                        } catch(e) {}
+
+                        let limitMins = targetMins; 
+                        let train = await fetchRealTrainSilent(stn.name, limitMins, subMins); 
+                        
+                        if(train) {
+                            validOptions.push({ stn: stn, c: limitMins, d: train.depM, train: train, placeName, targetTime, routeMode: 'B' });
+                        }
+                    }
+
+                    if(validOptions.length === 0) throw new Error("적합한 배차표를 찾을 수 없습니다.");
+
+                    validOptions.sort((a, b) => b.d - a.d);
+                    let maxD = validOptions[0].d; 
+                    let finalOptions = validOptions.filter(o => o.d >= maxD - 15);
+
+                    if (finalOptions.length === 1) {
+                        renderFinalResult(finalOptions[0]);
+                    } else {
+                        window.tempOptions = finalOptions;
+                        let html = '';
+                        finalOptions.forEach((opt, idx) => {
+                            html += `<button class="station-btn" onclick="selectOption(${idx})">
+                                <div style="text-align:left;">
+                                    <div style="font-size:15px; margin-bottom:4px;"><i class="fas fa-subway"></i> ${opt.stn.name}역 도착 목표</div>
+                                    <div style="font-size:12px; color:#aaa;">(목적지까지 도보 ${opt.stn.walk}분)</div>
+                                </div>
+                                <div style="text-align:right;">
+                                    <div style="font-size:11px; color:var(--green); margin-bottom:2px;">상일동 출발</div>
+                                    <div style="font-size:18px; font-weight:bold; color:var(--blue);">${minsToHm(opt.d)}</div>
+                                </div>
+                            </button>`;
+                        });
+                        document.getElementById('station-list').innerHTML = html;
+                        document.getElementById('station-selector').style.display = 'block';
                     }
                 }
-
-                if(validOptions.length === 0) throw new Error("적합한 배차표를 찾을 수 없습니다.");
-
-                validOptions.sort((a, b) => b.d - a.d);
-                let maxD = validOptions[0].d; 
-                let finalOptions = validOptions.filter(o => o.d >= maxD - 15);
-
-                if (finalOptions.length === 1) {
-                    printLog("필터링 결과 압도적인 단일 최적 경로가 도출되어 자동 확정합니다.");
-                    renderFinalResult(finalOptions[0]);
-                } else {
-                    window.tempOptions = finalOptions;
-                    let html = '';
-                    finalOptions.forEach((opt, idx) => {
-                        html += `<button class="station-btn" onclick="selectOption(${idx})">
-                            <div style="text-align:left;">
-                                <div style="font-size:15px; margin-bottom:4px;"><i class="fas fa-subway"></i> ${opt.stn.name}역 도착 목표</div>
-                                <div style="font-size:12px; color:#aaa;">(목적지까지 도보 ${opt.stn.walk}분 거리)</div>
-                            </div>
-                            <div style="text-align:right;">
-                                <div style="font-size:11px; color:var(--green); margin-bottom:2px;">상일동 출발 시각</div>
-                                <div style="font-size:18px; font-weight:bold; color:var(--blue);">${minsToHm(opt.d)}</div>
-                            </div>
-                        </button>`;
-                    });
-                    document.getElementById('station-list').innerHTML = html;
-                    document.getElementById('station-selector').style.display = 'block';
-                    printLog("스캔 완료. 원하는 경로를 선택해 주세요.");
-                }
             }
-        } catch(e) { printLog(`❌ 시스템 에러: ${e.message}`, "#ff453a"); }
+        } catch(e) { alert(e.message); }
     }
 
     async function fetchRealTrainSilent(stnName, limitMins, subMins) {
@@ -329,25 +326,15 @@
         document.getElementById('result').style.display = 'block';
         
         const doorMins = opt.d - CONFIG.MARGIN;
+        
+        // 파란 테두리 UI 반영
         document.getElementById('res-door').innerText = minsToHm(doorMins);
-        document.getElementById('res-train').innerText = `상일동역 ${minsToHm(opt.d)} 출발 열차 기준 (-${CONFIG.MARGIN}분 마진)`;
+        document.getElementById('res-train').innerText = minsToHm(opt.d);
         
-        // ★ 모드별 맞춤 결과 출력 안내문 분리 ★
-        if (opt.routeMode === 'A') {
-            document.getElementById('res-meta').innerHTML = `
-                최종 목적지: ${opt.placeName} (${opt.targetTime} 도착 목표)<br>
-                이동 계획: 하차역(${opt.stn.name}) 도착 후 실제 도보 ${opt.stn.walk}분<br>
-                <span style="color:var(--green)">하차역 실제 도착 예정 시각: ${opt.train.arr}</span>
-            `;
-        } else {
-            document.getElementById('res-meta').innerHTML = `
-                도착 목표: ${opt.stn.name}역 (${opt.targetTime} 도착 목표)<br>
-                참고 정보: 하차 후 목적지(${opt.placeName})까지 도보 약 ${opt.stn.walk}분 소요<br>
-                <span style="color:var(--green)">하차역 실제 도착 예정 시각: ${opt.train.arr}</span>
-            `;
-        }
-        
-        printLog(`최종 확정: [${opt.stn.name}역 도착] 경로 생성 완료.`, "#30d158");
+        document.getElementById('res-meta').innerHTML = `
+            도착 후 실제 도보 ${opt.stn.walk}분<br>
+            <span style="color:var(--green)">하차역 실제 도착 예정 시각: ${opt.train.arr}</span>
+        `;
     }
 
     async function processKMAWeather(lat, lon, targetH) {
