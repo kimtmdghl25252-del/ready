@@ -3,149 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 Premium v52.0</title>
+    <title>S26 Premium v51.0</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root {
-            --bg: #000;
-            --card: #151515;
-            --blue: #0a84ff;
-            --green: #30d158;
-            --red: #ff453a;
-            --text: #fff;
-            --orange: #ff9f0a;
-            --purple: #bf5af2;
-        }
-
+        :root { --bg: #000; --card: #151515; --blue: #0a84ff; --green: #30d158; --red: #ff453a; --text: #fff; --orange: #ff9f0a; --purple: #bf5af2; }
         body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; padding-bottom: 50px; }
-
-        .header {
-            font-size: 24px;
-            font-weight: 900;
-            color: var(--blue);
-            margin-bottom: 25px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
+        .header { font-size: 24px; font-weight: 900; color: var(--blue); margin-bottom: 25px; display: flex; align-items: center; justify-content: space-between; }
         .badge { font-size: 10px; background: #333; padding: 4px 8px; border-radius: 6px; color: var(--purple); letter-spacing: 1px; }
-
         .input-box { background: var(--card); border: 1px solid #333; border-radius: 20px; padding: 25px; margin-bottom: 20px; }
         label { display: block; font-size: 12px; color: #888; margin-bottom: 8px; font-weight: bold; }
-        input[type="text"], input[type="time"] {
-            width: 100%;
-            background: #000;
-            border: 1px solid #444;
-            border-radius: 12px;
-            padding: 15px;
-            color: #fff;
-            font-size: 16px;
-            box-sizing: border-box;
-            margin-bottom: 20px;
-            outline: none;
-            font-weight: bold;
-        }
+        input[type="text"], input[type="time"] { width: 100%; background: #000; border: 1px solid #444; border-radius: 12px; padding: 15px; color: #fff; font-size: 16px; box-sizing: border-box; margin-bottom: 20px; outline: none; font-weight: bold; }
 
-        /* ── 버튼: 로딩 상태 추가 ── */
-        button.main-btn {
-            width: 100%;
-            padding: 18px;
-            border-radius: 14px;
-            border: none;
-            background: var(--blue);
-            color: #fff;
-            font-weight: 900;
-            font-size: 16px;
-            cursor: pointer;
-            transition: opacity 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        button.main-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-        button.main-btn .spinner {
-            display: none;
-            width: 16px;
-            height: 16px;
-            border: 2px solid rgba(255,255,255,0.3);
-            border-top-color: #fff;
-            border-radius: 50%;
-            animation: spin 0.7s linear infinite;
-        }
-        button.main-btn.loading .spinner { display: inline-block; }
-        button.main-btn.loading .btn-icon { display: none; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
+        button { width: 100%; padding: 18px; border-radius: 14px; border: none; background: var(--blue); color: #fff; font-weight: 900; font-size: 16px; cursor: pointer; transition: 0.2s; }
+        
         #station-selector { display: none; margin-bottom: 20px; }
-        .station-btn {
-            background: #222;
-            border: 1px solid #444;
-            color: #fff;
-            padding: 15px;
-            margin-bottom: 10px;
-            border-radius: 12px;
-            text-align: left;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            width: 100%;
-            cursor: pointer;
-            transition: border-color 0.15s;
-        }
-        .station-btn:hover { border-color: var(--blue); }
-
-        .result-card {
-            background: linear-gradient(145deg, #1a1a1c, #000);
-            border: 1px solid var(--blue);
-            border-radius: 24px;
-            padding: 30px 20px;
-            text-align: center;
-            display: none;
-            margin-top: 20px;
-        }
+        .station-btn { background: #222; border: 1px solid #444; color: #fff; padding: 15px; margin-bottom: 10px; border-radius: 12px; text-align: left; display: flex; justify-content: space-between; align-items: center; width: 100%; cursor: pointer; }
+        
+        .result-card { background: linear-gradient(145deg, #1a1a1c, #000); border: 1px solid var(--blue); border-radius: 24px; padding: 30px 20px; text-align: center; display: none; margin-top: 20px; }
         .door-time { font-size: 75px; font-weight: 900; color: var(--blue); letter-spacing: -3px; margin: 15px 0; }
         .train-info { font-size: 16px; color: var(--green); font-weight: bold; margin-bottom: 20px; }
-
-        .weather-box {
-            background: rgba(255,255,255,0.05);
-            border-radius: 16px;
-            padding: 20px;
-            margin-bottom: 20px;
-            text-align: left;
-            border: 1px solid #333;
-        }
+        
+        .weather-box { background: rgba(255,255,255,0.05); border-radius: 16px; padding: 20px; margin-bottom: 20px; text-align: left; border: 1px solid #333; }
         .w-header { font-size: 14px; color: var(--orange); font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 10px; }
         .chart-container { position: relative; height: 150px; width: 100%; margin-top: 15px; }
 
-        /* ── 에러 배너 ── */
-        #error-banner {
-            display: none;
-            background: rgba(255,69,58,0.12);
-            border: 1px solid var(--red);
-            border-radius: 12px;
-            padding: 14px 16px;
-            color: var(--red);
-            font-size: 13px;
-            font-weight: bold;
-            margin-top: 16px;
-        }
-
-        #log {
-            background: #050505;
-            border: 1px solid #222;
-            padding: 15px;
-            height: 180px;
-            overflow-y: auto;
-            color: #0f0;
-            font-size: 11px;
-            margin-top: 20px;
-            border-radius: 12px;
-            font-family: 'Cascadia Code', monospace;
-            line-height: 1.5;
-        }
+        #log { background: #050505; border: 1px solid #222; padding: 15px; height: 180px; overflow-y: auto; color: #0f0; font-size: 11px; margin-top: 20px; border-radius: 12px; font-family: 'Cascadia Code', monospace; line-height: 1.5; }
     </style>
 </head>
 <body>
@@ -153,24 +37,18 @@
 <div class="container">
     <div class="header">
         <span>S26 <span style="color:#fff;">Premium</span></span>
-        <span class="badge">v52.0 SMART AI</span>
+        <span class="badge">v51.0 SMART AI</span>
     </div>
 
     <div class="input-box">
         <label>최종 목적지 (출발: 상일동 고정)</label>
         <input type="text" id="dest" value="천호보건지소">
-
+        
         <label>목표 도착 시각 (24H)</label>
         <input type="time" id="time" value="22:02">
-
-        <button class="main-btn" id="run-btn" onclick="startEngine()">
-            <span class="spinner"></span>
-            <i class="fas fa-magic btn-icon"></i>
-            <span class="btn-label">최적 경로 스마트 연산</span>
-        </button>
+        
+        <button onclick="startEngine()"><i class="fas fa-magic"></i> 최적 경로 스마트 연산</button>
     </div>
-
-    <div id="error-banner"></div>
 
     <div id="station-selector">
         <label style="color:var(--purple); font-size:14px; margin-bottom:10px; display:block;">선택 가능한 추천 경로 (출발시각 기준 정렬)</label>
@@ -181,63 +59,49 @@
         <div style="font-size: 14px; color: #aaa; font-weight: bold;">현관문을 나서야 할 시각</div>
         <div id="res-door" class="door-time">--:--</div>
         <div id="res-train" class="train-info"></div>
-
+        
         <div id="res-weather" class="weather-box">
-            <div class="w-header"><i class="fas fa-temperature-high"></i> 목적지 온도 스펙트럼 &amp; 코디</div>
+            <div class="w-header"><i class="fas fa-temperature-high"></i> 목적지 온도 스펙트럼 & 코디</div>
             <div id="w-temp" style="font-size: 16px; font-weight: bold; color: #fff;"></div>
             <div id="w-clothes" style="font-size:13px; color:#ddd; margin-top:10px; line-height:1.6;"></div>
-
-            <div class="w-header" style="margin-top:20px; font-size:13px; color:var(--blue); border:none;">
-                <i class="fas fa-umbrella"></i> 목적지 강수 확률 (40% 이상 경고)
-            </div>
+            
+            <div class="w-header" style="margin-top:20px; font-size:13px; color:var(--blue); border:none;"><i class="fas fa-umbrella"></i> 목적지 강수 확률 (40% 이상 경고)</div>
             <div class="chart-container"><canvas id="rainChart"></canvas></div>
         </div>
 
         <div id="res-meta" style="font-size: 13px; color: #888; border-top: 1px solid #222; padding-top: 15px; line-height: 1.6;"></div>
     </div>
 
-    <div id="log">대기 중... 사용자 맞춤 알고리즘 탑재 완료. (v52.0)</div>
+    <div id="log">대기 중... 사용자 맞춤 알고리즘 탑재 완료. (v51.0)</div>
 </div>
 
 <script>
     const CONFIG = {
-        KAKAO:  '56b6a0adbc28cab6f7c87ac9f84b14d0',
-        SEOUL:  '597057594f6b696d3448526a7a564e',
-        KMA:    'ddfd71d0b929827fd9c3c1851b50c301f9afb482a3143c0b39e135f9b3b8f070',
-        PROXY:  'https://script.google.com/macros/s/AKfycbxRODYhCj2NupEwxZm7YEigfFM_N_wg5TXUHWGtDvirC_clahAQgx7Z4bT94rJX9fZWtg/exec',
-        MARGIN: 10,
-        MAX_WALK_MINS:    15,
-        STATION_SCAN_TOP:  4,   // 조건2: 상위 몇 개 역 스캔
-        FALLBACK_SUB_MINS: 30,  // API 실패 시 기본 지하철 이동 시간
+        KAKAO: '56b6a0adbc28cab6f7c87ac9f84b14d0',
+        SEOUL: '597057594f6b696d3438526a7a564e',
+        KMA: 'ddfd71d0b929827fd9c3c1851b50c301f9afb482a3143c0b39e135f9b3b8f070',
+        PROXY: 'https://script.google.com/macros/s/AKfycbxRODYhCj2NupEwxZm7YEigfFM_N_wg5TXUHWGtDvirC_clahAQgx7Z4bT94rJX9fZWtg/exec',
+        MARGIN: 10
     };
 
     let rainChart = null;
 
-    /* ── 유틸 ── */
-    function printLog(msg, color = '#0f0') {
+    function printLog(msg, color = "#0f0") {
         const log = document.getElementById('log');
-        const div = document.createElement('div');
-        div.style.cssText = `color:${color}; margin-bottom:4px;`;
-        div.textContent = '> ' + msg;
-        log.appendChild(div);
+        log.innerHTML += `<div style="color:${color}; margin-bottom:4px;">> ${msg}</div>`;
         log.scrollTop = log.scrollHeight;
     }
 
     function hmToMins(timeStr) {
-        const [h, m] = timeStr.split(':').map(Number);
+        let [h, m] = timeStr.split(':').map(Number);
         return h * 60 + m;
     }
-
+    
     function minsToHm(mins) {
-        let m = Math.round(mins) % (24 * 60);
-        if (m < 0) m += 24 * 60;
+        let m = Math.round(mins);
+        while(m < 0) m += 24 * 60;
+        m = m % (24 * 60);
         return `${String(Math.floor(m / 60)).padStart(2,'0')}:${String(m % 60).padStart(2,'0')}`;
-    }
-
-    // 현재 날짜 문자열 (YYYY-MM-DD) — 한 번만 계산
-    function todayStr() {
-        const d = new Date();
-        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     }
 
     function cleanStationName(name) {
@@ -245,355 +109,288 @@
     }
 
     // 실제 카카오맵 도보 알고리즘 반영 (직선거리 * 1.35 가중치 / 67m/분)
-    function calcRealWalkMins(straightDistanceM) {
-        return Math.ceil((straightDistanceM * 1.35) / 67);
+    function calcRealWalkMins(straightDistance) {
+        return Math.ceil((straightDistance * 1.35) / 67);
     }
 
-    /* ── UI 상태 ── */
-    function setLoading(on) {
-        const btn = document.getElementById('run-btn');
-        btn.disabled = on;
-        btn.classList.toggle('loading', on);
-        if (on) btn.querySelector('.btn-label').textContent = '연산 중...';
-        else     btn.querySelector('.btn-label').textContent = '최적 경로 스마트 연산';
-    }
-
-    function showError(msg) {
-        const el = document.getElementById('error-banner');
-        el.textContent = '⚠️ ' + msg;
-        el.style.display = 'block';
-        printLog(`❌ 에러: ${msg}`, '#ff453a');
-    }
-
-    function clearError() {
-        document.getElementById('error-banner').style.display = 'none';
-    }
-
-    /* ── 서울 열린데이터광장 API: 지하철 소요시간 조회 ── */
-    async function fetchSubwayMins(stnName) {
-        const dateTimeStr = `${todayStr()} 12:00:00`;
-        const apiUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/100/상일동/${stnName}/${dateTimeStr}/1/%20/%20/Y`;
-        try {
-            const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(apiUrl)}`);
-            const xml = new DOMParser().parseFromString(await res.text(), 'text/xml');
-            if (xml.getElementsByTagName('resultCode')[0]?.textContent === '00') {
-                const mins = Math.ceil(Number(xml.getElementsByTagName('totalreqHr')[0]?.textContent) / 60);
-                if (mins > 0) return mins;
-            }
-        } catch (e) {
-            printLog(`  서울 API 응답 실패 (${stnName}): ${e.message}`, '#ff9f0a');
-        }
-        return CONFIG.FALLBACK_SUB_MINS; // 실패 시 폴백
-    }
-
-    /* ── 배차 조회: 4개 시간대 병렬 요청 ── */
-    async function fetchRealTrainSilent(stnName, limitMins, subMins) {
-        const expectedDepMins = limitMins - subMins;
-        const dateStr = todayStr();
-        const offsets = [-30, -15, 0, 10];
-
-        // 4개 요청을 병렬로 날림
-        const results = await Promise.allSettled(
-            offsets.map(off => {
-                const reqTimeStr = minsToHm(expectedDepMins + off) + ':00';
-                const apiUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/100/상일동/${stnName}/${dateStr} ${reqTimeStr}/1/%20/%20/Y`;
-                return fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(apiUrl)}`)
-                    .then(r => r.text())
-                    .then(xmlText => {
-                        const xml = new DOMParser().parseFromString(xmlText, 'text/xml');
-                        const deps = xml.getElementsByTagName('trainDptreTm');
-                        const arrs = xml.getElementsByTagName('trainArvlTm');
-                        if (deps.length && arrs.length) {
-                            return {
-                                dep:  deps[0].textContent,
-                                arr:  arrs[arrs.length - 1].textContent,
-                                depM: hmToMins(deps[0].textContent),
-                                arrM: hmToMins(arrs[arrs.length - 1].textContent),
-                            };
-                        }
-                        return null;
-                    });
-            })
-        );
-
-        // 유효한 결과만 추려서 limitMins 이내로 도착하는 가장 늦은 열차 선택
-        const trains = results
-            .filter(r => r.status === 'fulfilled' && r.value !== null)
-            .map(r => r.value);
-
-        let bestTrain = null;
-        let minDiff = Infinity;
-
-        for (const t of trains) {
-            let diff = limitMins - t.arrM;
-            if (diff < -720) diff += 1440;
-            if (diff >  720) diff -= 1440;
-            if (diff >= 0 && diff < minDiff) {
-                minDiff = diff;
-                bestTrain = t;
-            }
-        }
-        return bestTrain;
-    }
-
-    /* ── 메인 엔진 ── */
+    // 뒤에서 선택하기 위해 옵션들을 전역 저장
     window.tempOptions = [];
 
     async function startEngine() {
-        const dest       = document.getElementById('dest').value.trim();
+        const dest = document.getElementById('dest').value.trim();
         const targetTime = document.getElementById('time').value;
-        if (!dest) { showError('목적지를 입력해 주세요.'); return; }
 
-        document.getElementById('result').style.display    = 'none';
+        document.getElementById('result').style.display = 'none';
         document.getElementById('station-selector').style.display = 'none';
-        document.getElementById('log').innerHTML           = '';
+        document.getElementById('log').innerHTML = "";
         window.tempOptions = [];
-        clearError();
-        setLoading(true);
 
         try {
-            // ── 1. 목적지 좌표 조회 ──
-            printLog('1. 카카오 API 목적지 스캔...');
-            const kRes  = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(dest)}`, {
+            printLog("1. 카카오 API 목적지 스캔...");
+            const kRes = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(dest)}`, {
                 headers: { Authorization: `KakaoAK ${CONFIG.KAKAO}` }
             });
             const kData = await kRes.json();
-            if (!kData.documents?.[0]) throw new Error('장소를 찾을 수 없습니다.');
-
+            if(!kData.documents[0]) throw new Error("장소를 찾을 수 없습니다.");
+            
             const { x: destX, y: destY, place_name: placeName } = kData.documents[0];
+            
+            processKMAWeather(destY, destX, parseInt(targetTime.split(':')[0]));
 
-            // ── 2. 날씨 조회 & 지하철 탐색을 병렬 실행 ──
-            const targetH = parseInt(targetTime.split(':')[0], 10);
-            const [, sData] = await Promise.all([
-                processKMAWeather(destY, destX, targetH),
-                fetch(`https://dapi.kakao.com/v2/local/search/category.json?category_group_code=SW8&x=${destX}&y=${destY}&radius=2000&sort=distance`, {
-                    headers: { Authorization: `KakaoAK ${CONFIG.KAKAO}` }
-                }).then(r => r.json()),
-            ]);
-
-            printLog('2. 주변 지하철역 스캔 및 도보 시간 확보...');
-
-            // Map으로 중복 제거
-            const stationMap = new Map();
-            for (const d of sData.documents) {
-                const name = cleanStationName(d.place_name);
-                if (!stationMap.has(name)) {
-                    stationMap.set(name, { name, walk: calcRealWalkMins(Number(d.distance)) });
+            printLog("2. 주변 지하철역 스캔 및 도보 시간 확보...");
+            const sRes = await fetch(`https://dapi.kakao.com/v2/local/search/category.json?category_group_code=SW8&x=${destX}&y=${destY}&radius=2000&sort=distance`, {
+                headers: { Authorization: `KakaoAK ${CONFIG.KAKAO}` }
+            });
+            const sData = await sRes.json();
+            
+            let allStations = [];
+            let seen = new Set();
+            sData.documents.forEach(d => {
+                let name = cleanStationName(d.place_name); 
+                if (!seen.has(name)) {
+                    seen.add(name);
+                    allStations.push({ name: name, walk: calcRealWalkMins(d.distance) });
                 }
-            }
-            const allStations    = [...stationMap.values()];
-            const walk15Stations = allStations.filter(s => s.walk <= CONFIG.MAX_WALK_MINS);
-            const targetMins     = hmToMins(targetTime);
+            });
 
-            // ── 조건 분기 ──
+            // 사용자 로직: 도보 15분 이내 역 추출
+            let walk15Stations = allStations.filter(s => s.walk <= 15);
+            const targetMins = hmToMins(targetTime);
+
+            // [조건 1] 15분 이내 역이 없거나 1개일 때 -> 전체 역 중 최단시간 탐색 (자동)
             if (walk15Stations.length <= 1) {
-                // [조건 1] 가까운 역이 1개 이하 → 최단 경로 자동 결정
-                printLog(`[조건 감지] 15분 이내 역 1개 이하. 자동 결정합니다.`, '#bf5af2');
-
-                // BUG FIX: allStations가 비어있을 경우 처리
-                if (allStations.length === 0) throw new Error('2km 이내 지하철역을 찾을 수 없습니다.');
-
-                const topStations = allStations.slice(0, 3);
-
-                // 지하철 소요시간 병렬 조회
-                const subMinsList = await Promise.all(topStations.map(s => fetchSubwayMins(s.name)));
-
+                printLog(`[조건 감지] 15분 이내 역이 1개 이하입니다. 최단 이동시간 경로로 자동 결정합니다.`, "#bf5af2");
+                let topStations = allStations.slice(0, 3);
                 let bestRoute = null;
-                let minTotal  = Infinity;
-                topStations.forEach((s, i) => {
-                    const total = subMinsList[i] + s.walk;
-                    if (total < minTotal) { minTotal = total; bestRoute = { ...s, subMins: subMinsList[i] }; }
-                });
+                let minTotalMins = Infinity;
+
+                for(let stn of topStations) {
+                    let subMins = 30; 
+                    try {
+                        const d = new Date();
+                        const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                        const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/100/상일동/${stn.name}/${dateStr} 12:00:00/1/%20/%20/Y`;
+                        const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeApi)}`);
+                        const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
+                        if (xml.getElementsByTagName("resultCode")[0]?.textContent === "00") {
+                            subMins = Math.ceil(Number(xml.getElementsByTagName("totalreqHr")[0]?.textContent) / 60);
+                        }
+                    } catch(e) {}
+                    
+                    let totalRouteMins = subMins + stn.walk;
+                    if (totalRouteMins < minTotalMins) {
+                        minTotalMins = totalRouteMins;
+                        bestRoute = { ...stn, subMins };
+                    }
+                }
 
                 const limitMins = targetMins - bestRoute.walk;
-                const train     = await fetchRealTrainSilent(bestRoute.name, limitMins, bestRoute.subMins);
+                let train = await fetchRealTrainSilent(bestRoute.name, limitMins, bestRoute.subMins);
+                
+                if(train) {
+                    let opt = { stn: bestRoute, c: limitMins, d: train.depM, train: train, placeName, targetTime };
+                    renderFinalResult(opt);
+                } else {
+                    throw new Error("서버 배차 응답 오류로 경로를 생성할 수 없습니다.");
+                }
 
-                if (!train) throw new Error('서버 배차 응답 오류로 경로를 생성할 수 없습니다.');
-                renderFinalResult({ stn: bestRoute, c: limitMins, d: train.depM, train, placeName, targetTime });
+            } 
+            // [조건 2] 15분 이내 역이 2개 이상일 때 -> 출발시간 기반 필터링 및 선택창 제공
+            else {
+                printLog(`[조건 감지] 15분 이내 역이 ${walk15Stations.length}개 있습니다. 정밀 역산 후 선택창을 구성합니다.`, "#bf5af2");
+                let validOptions = [];
 
-            } else {
-                // [조건 2] 가까운 역 2개 이상 → 선택창 제공
-                printLog(`[조건 감지] 15분 이내 역 ${walk15Stations.length}개. 정밀 역산 중...`, '#bf5af2');
+                for(let stn of walk15Stations.slice(0, 4)) { // 랙 방지를 위해 상위 4개까지만 스캔
+                    let subMins = 30; 
+                    try {
+                        const d = new Date();
+                        const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                        const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/100/상일동/${stn.name}/${dateStr} 12:00:00/1/%20/%20/Y`;
+                        const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeApi)}`);
+                        const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
+                        if (xml.getElementsByTagName("resultCode")[0]?.textContent === "00") {
+                            subMins = Math.ceil(Number(xml.getElementsByTagName("totalreqHr")[0]?.textContent) / 60);
+                        }
+                    } catch(e) {}
 
-                const scanTargets = walk15Stations.slice(0, CONFIG.STATION_SCAN_TOP);
+                    let limitMins = targetMins - stn.walk; // c: 목적시간 - 도보시간
+                    let train = await fetchRealTrainSilent(stn.name, limitMins, subMins); // d 구하기
+                    
+                    if(train) {
+                        validOptions.push({ stn: stn, c: limitMins, d: train.depM, train: train, placeName, targetTime });
+                    }
+                }
 
-                // 지하철 소요시간 병렬 조회
-                const subMinsList = await Promise.all(scanTargets.map(s => fetchSubwayMins(s.name)));
+                if(validOptions.length === 0) throw new Error("적합한 배차표를 찾을 수 없습니다.");
 
-                // 배차 조회도 병렬
-                const trainResults = await Promise.all(
-                    scanTargets.map((s, i) => {
-                        const limitMins = targetMins - s.walk;
-                        return fetchRealTrainSilent(s.name, limitMins, subMinsList[i])
-                            .then(train => train
-                                ? { stn: s, c: limitMins, d: train.depM, train, placeName, targetTime }
-                                : null
-                            );
-                    })
-                );
-
-                const validOptions = trainResults.filter(Boolean);
-                if (validOptions.length === 0) throw new Error('적합한 배차표를 찾을 수 없습니다.');
-
-                // 출발이 가장 늦은 순으로 정렬, 15분 이내 옵션만 필터
+                // d를 가장 늦은 시각부터 차례대로 나열 (내림차순)
                 validOptions.sort((a, b) => b.d - a.d);
-                const maxD        = validOptions[0].d;
-                const finalOptions = validOptions.filter(o => o.d >= maxD - 15);
+
+                let maxD = validOptions[0].d; // 가장 늦게 출발해도 되는 최적 시각
+                
+                // d - 15분 보다 이른 시각 삭제
+                let finalOptions = validOptions.filter(o => o.d >= maxD - 15);
 
                 if (finalOptions.length === 1) {
-                    printLog('단일 최적 경로 자동 확정.');
+                    printLog("필터링 결과 압도적인 단일 최적 경로가 도출되어 자동 확정합니다.");
                     renderFinalResult(finalOptions[0]);
                 } else {
                     window.tempOptions = finalOptions;
-                    document.getElementById('station-list').innerHTML = finalOptions.map((opt, idx) => `
-                        <button class="station-btn" onclick="selectOption(${idx})">
+                    let html = '';
+                    finalOptions.forEach((opt, idx) => {
+                        html += `<button class="station-btn" onclick="selectOption(${idx})">
                             <div style="text-align:left;">
-                                <div style="font-size:15px; margin-bottom:4px;">
-                                    <i class="fas fa-subway"></i> ${opt.stn.name}역 하차 (도보 ${opt.stn.walk}분)
-                                </div>
+                                <div style="font-size:15px; margin-bottom:4px;"><i class="fas fa-subway"></i> ${opt.stn.name}역 하차 (도보 ${opt.stn.walk}분)</div>
                                 <div style="font-size:12px; color:#888;">${opt.stn.name}역 도착 목표: ${minsToHm(opt.c)}</div>
                             </div>
                             <div style="text-align:right;">
                                 <div style="font-size:11px; color:var(--green); margin-bottom:2px;">상일동 출발</div>
                                 <div style="font-size:18px; font-weight:bold; color:var(--blue);">${minsToHm(opt.d)}</div>
                             </div>
-                        </button>`).join('');
+                        </button>`;
+                    });
+                    document.getElementById('station-list').innerHTML = html;
                     document.getElementById('station-selector').style.display = 'block';
-                    printLog('스캔 완료. 원하는 경로를 선택해 주세요.');
+                    printLog("스캔 완료. 원하는 경로를 선택해 주세요.");
                 }
             }
-        } catch (e) {
-            showError(e.message);
-        } finally {
-            setLoading(false);
-        }
+        } catch(e) { printLog(`❌ 시스템 에러: ${e.message}`, "#ff453a"); }
     }
 
+    // 화면 표출 없이 조용히 배차를 긁어오는 함수
+    async function fetchRealTrainSilent(stnName, limitMins, subMins) {
+        const expectedDepMins = limitMins - subMins;
+        const d = new Date();
+        const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        
+        const offsets = [-30, -15, 0, 10];
+        let allTrains = [];
+
+        for(let off of offsets) {
+            let reqMins = expectedDepMins + off;
+            let reqTimeStr = minsToHm(reqMins) + ':00';
+            
+            let apiUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/100/상일동/${stnName}/${dateStr} ${reqTimeStr}/1/%20/%20/Y`;
+            try {
+                let res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(apiUrl)}`);
+                let xmlText = await res.text();
+                let xml = new DOMParser().parseFromString(xmlText, "text/xml");
+                
+                let deps = xml.getElementsByTagName("trainDptreTm");
+                let arrs = xml.getElementsByTagName("trainArvlTm");
+                
+                if(deps.length > 0 && arrs.length > 0) {
+                    let dep = deps[0].textContent;
+                    let arr = arrs[arrs.length - 1].textContent;
+                    allTrains.push({ dep, arr, arrM: hmToMins(arr), depM: hmToMins(dep) });
+                }
+            } catch(e) {}
+        }
+
+        let bestTrain = null;
+        let minDiff = Infinity;
+
+        if(allTrains.length > 0) {
+            allTrains.forEach(t => {
+                let diff = limitMins - t.arrM;
+                if(diff < -720) diff += 1440;
+                if(diff > 720) diff -= 1440;
+
+                if(diff >= 0 && diff < minDiff) {
+                    minDiff = diff;
+                    bestTrain = t;
+                }
+            });
+        }
+        return bestTrain;
+    }
+
+    // 선택창에서 유저가 클릭했을 때 실행
     function selectOption(idx) {
         const opt = window.tempOptions[idx];
         document.getElementById('station-selector').style.display = 'none';
         renderFinalResult(opt);
     }
 
+    // 최종 결과 카드 렌더링
     function renderFinalResult(opt) {
         document.getElementById('result').style.display = 'block';
-
+        
         const doorMins = opt.d - CONFIG.MARGIN;
-        document.getElementById('res-door').textContent = minsToHm(doorMins);
-        document.getElementById('res-train').textContent =
-            `상일동역 ${minsToHm(opt.d)} 출발 열차 기준 (-${CONFIG.MARGIN}분 마진)`;
-
+        document.getElementById('res-door').innerText = minsToHm(doorMins);
+        document.getElementById('res-train').innerText = `상일동역 ${minsToHm(opt.d)} 출발 열차 기준 (-${CONFIG.MARGIN}분 마진)`;
+        
         document.getElementById('res-meta').innerHTML = `
             최종 목적지: ${opt.placeName} (${opt.targetTime} 도착 목표)<br>
             이동 계획: 하차역(${opt.stn.name}) 도착 후 실제 도보 ${opt.stn.walk}분<br>
             <span style="color:var(--green)">하차역 실제 도착 예정 시각: ${opt.train.arr}</span>
         `;
-        printLog(`최종 확정: [${opt.stn.name}역 하차 경로] 생성 완료.`, '#30d158');
+        printLog(`최종 확정: [${opt.stn.name}역 하차 경로] 생성 완료.`, "#30d158");
     }
 
-    /* ── 기상청 날씨 처리 ── */
+    // 기상청 데이터 처리 (UI 수정 포함)
     async function processKMAWeather(lat, lon, targetH) {
-        const grid    = dfs_xy_conv(lat, lon);
-        const baseDate = todayStr().replace(/-/g, '');
-        const url = `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst`
-            + `?serviceKey=${CONFIG.KMA}&numOfRows=1000&pageNo=1`
-            + `&base_date=${baseDate}&base_time=0200`
-            + `&nx=${grid.nx}&ny=${grid.ny}&dataType=JSON`;
-
+        const grid = dfs_xy_conv(lat, lon);
+        const baseDate = new Date().toISOString().slice(0,10).replace(/-/g, '');
+        const url = `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${CONFIG.KMA}&numOfRows=1000&pageNo=1&base_date=${baseDate}&base_time=0200&nx=${grid.nx}&ny=${grid.ny}&dataType=JSON`;
+        
         try {
-            const res   = await fetch(url);
-            const data  = await res.json();
+            const res = await fetch(url);
+            const data = await res.json();
             const items = data.response.body.items.item;
-
-            // 시간대별 집계
-            const hourly = {};
-            items.forEach(i => {
-                if (!hourly[i.fcstTime]) hourly[i.fcstTime] = {};
-                hourly[i.fcstTime][i.category] = i.fcstValue;
-            });
-
-            const times = Object.keys(hourly).sort()
-                .filter(t => {
-                    const h = parseInt(t.slice(0, 2), 10);
-                    return h >= targetH && h <= 22;
-                });
-            if (!times.length) return;
+            let hourly = {};
+            items.forEach(i => { if(!hourly[i.fcstTime]) hourly[i.fcstTime]={}; hourly[i.fcstTime][i.category]=i.fcstValue; });
+            
+            const times = Object.keys(hourly).sort().filter(t => parseInt(t.slice(0,2)) >= targetH && parseInt(t.slice(0,2)) <= 22);
+            if(times.length === 0) return;
 
             const temps = times.map(t => parseFloat(hourly[t].TMP));
-            const pops  = times.map(t => parseInt(hourly[t].POP, 10));
-            const minT  = Math.round(Math.min(...temps));
-            const maxT  = Math.round(Math.max(...temps));
+            const pops = times.map(t => parseInt(hourly[t].POP));
+            
+            const minT = Math.round(Math.min(...temps));
+            const maxT = Math.round(Math.max(...temps));
 
-            const CLOTHING_RULES = [
-                { min: 28, max: 99, label: '28도 이상',   text: '민소매, 반팔, 반바지' },
-                { min: 23, max: 27, label: '27도~23도',   text: '반팔, 얇은 셔츠/바지' },
-                { min: 20, max: 22, label: '22도~20도',   text: '긴팔 티셔츠, 얇은 가디건' },
-                { min: 17, max: 19, label: '19도~17도',   text: '얇은 니트, 맨투맨, 가을 자켓' },
-                { min: 12, max: 16, label: '16도~12도',   text: '자켓, 야상, 두꺼운 가디건' },
-                { min:  9, max: 11, label: '11도~9도',    text: '트렌치코트, 야상, 점퍼' },
-                { min:  5, max:  8, label: '8도~5도',     text: '코트, 가죽자켓, 히트텍' },
-                { min: -99, max: 4, label: '4도 이하',    text: '패딩, 두꺼운 코트, 방한용품' },
+            const rules = [
+                { min: 28, max: 99, label: "28도 이상", text: "민소매, 반팔, 반바지" },
+                { min: 23, max: 27, label: "27도~23도", text: "반팔, 얇은 셔츠/바지" },
+                { min: 20, max: 22, label: "22도~20도", text: "긴팔 티셔츠, 얇은 가디건" },
+                { min: 17, max: 19, label: "19도~17도", text: "얇은 니트, 맨투맨, 가을 자켓" },
+                { min: 12, max: 16, label: "16도~12도", text: "자켓, 야상, 두꺼운 가디건" },
+                { min: 9, max: 11, label: "11도~9도", text: "트렌치코트, 야상, 점퍼" },
+                { min: 5, max: 8, label: "8도~5도", text: "코트, 가죽자켓, 히트텍" },
+                { min: -99, max: 4, label: "4도 이하", text: "패딩, 두꺼운 코트, 방한용품" }
             ];
 
-            const recs = CLOTHING_RULES
-                .filter(r => r.min <= maxT && r.max >= minT)
-                .map(r => `- <span style="color:var(--orange); font-weight:bold;">${r.label}</span> : ${r.text}`);
+            let recommendations = [];
+            rules.forEach(r => {
+                if (r.min <= maxT && r.max >= minT) {
+                    recommendations.push(`- <span style="color:var(--orange); font-weight:bold;">${r.label}</span> : ${r.text}`);
+                }
+            });
 
-            document.getElementById('w-temp').textContent = `기온: 최저 ${minT}°C ~ 최고 ${maxT}°C`;
-            document.getElementById('w-clothes').innerHTML = `<b>도착 시점 추천 코디 스펙트럼:</b><br>${recs.join('<br>')}`;
-
-            // 기존 차트 안전하게 파기
-            if (rainChart) { rainChart.destroy(); rainChart = null; }
-
+            document.getElementById('w-temp').innerText = `기온: 최저 ${minT}°C ~ 최고 ${maxT}°C`;
+            document.getElementById('w-clothes').innerHTML = `<b>도착 시점 추천 코디 스펙트럼:</b><br>${recommendations.join('<br>')}`;
+            
+            if(rainChart) rainChart.destroy();
             const pointColors = pops.map(p => p >= 40 ? '#ff453a' : '#0a84ff');
             rainChart = new Chart(document.getElementById('rainChart'), {
                 type: 'line',
-                data: {
-                    labels:   times.map(t => t.slice(0, 2) + '시'),
-                    datasets: [{
-                        data:               pops,
-                        borderColor:        '#0a84ff',
-                        backgroundColor:    'rgba(10,132,255,0.1)',
-                        borderWidth:        2,
-                        pointBackgroundColor: pointColors,
-                        fill:               true,
-                    }],
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: { min: 0, max: 100, ticks: { color: '#888' }, grid: { color: '#333' } },
-                        x: { ticks: { color: '#888' } },
-                    },
-                },
+                data: { labels: times.map(t=>t.slice(0,2)+'시'), datasets: [{ data: pops, borderColor: '#0a84ff', backgroundColor: 'rgba(10,132,255,0.1)', borderWidth: 2, pointBackgroundColor: pointColors, fill: true }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100, ticks: {color: '#888'}, grid: {color: '#333'} }, x: { ticks: {color: '#888'} } } }
             });
-        } catch (e) {
-            printLog('날씨 데이터 로드 실패 (결과 표시에는 영향 없음)', '#ff9f0a');
-        }
+        } catch(e) {}
     }
 
-    /* ── 기상청 격자 좌표 변환 ── */
     function dfs_xy_conv(v1, v2) {
-        const RE = 6371.00877, GRID = 5.0, SLAT1 = 30.0, SLAT2 = 60.0,
-              OLON = 126.0, OLAT = 38.0, XO = 43, YO = 136,
-              DEGRAD = Math.PI / 180.0;
-        const re    = RE / GRID;
-        const slat1 = SLAT1 * DEGRAD, slat2 = SLAT2 * DEGRAD;
-        const olon  = OLON  * DEGRAD, olat  = OLAT  * DEGRAD;
-        const sn = Math.log(Math.cos(slat1) / Math.cos(slat2))
-                 / Math.log(Math.tan(Math.PI * 0.25 + slat2 * 0.5) / Math.tan(Math.PI * 0.25 + slat1 * 0.5));
-        const sf = Math.pow(Math.tan(Math.PI * 0.25 + slat1 * 0.5), sn) * Math.cos(slat1) / sn;
-        const ro = re * sf / Math.pow(Math.tan(Math.PI * 0.25 + olat  * 0.5), sn);
-        const ra = re * sf / Math.pow(Math.tan(Math.PI * 0.25 + v1 * DEGRAD * 0.5), sn);
-        let theta  = v2 * DEGRAD - olon;
-        if (theta >  Math.PI) theta -= 2.0 * Math.PI;
-        if (theta < -Math.PI) theta += 2.0 * Math.PI;
-        return {
-            nx: Math.floor(ra * Math.sin(theta * sn) + XO + 0.5),
-            ny: Math.floor(ro - ra * Math.cos(theta * sn) + YO + 0.5),
-        };
+        const RE = 6371.00877, GRID = 5.0, SLAT1 = 30.0, SLAT2 = 60.0, OLON = 126.0, OLAT = 38.0, XO = 43, YO = 136, DEGRAD = Math.PI / 180.0;
+        const re = RE / GRID, slat1 = SLAT1 * DEGRAD, slat2 = SLAT2 * DEGRAD, olon = OLON * DEGRAD, olat = OLAT * DEGRAD;
+        let sn = Math.log(Math.cos(slat1) / Math.cos(slat2)) / Math.log(Math.tan(Math.PI * 0.25 + slat2 * 0.5) / Math.tan(Math.PI * 0.25 + slat1 * 0.5));
+        let sf = Math.pow(Math.tan(Math.PI * 0.25 + slat1 * 0.5), sn) * Math.cos(slat1) / sn;
+        let ro = re * sf / Math.pow(Math.tan(Math.PI * 0.25 + olat * 0.5), sn);
+        let ra = re * sf / Math.pow(Math.tan(Math.PI * 0.25 + v1 * DEGRAD * 0.5), sn);
+        let theta = v2 * DEGRAD - olon;
+        if (theta > Math.PI) theta -= 2.0 * Math.PI; if (theta < -Math.PI) theta += 2.0 * Math.PI;
+        return { nx: Math.floor(ra * Math.sin(theta * sn) + XO + 0.5), ny: Math.floor(ro - ra * Math.cos(theta * sn) + YO + 0.5) };
     }
 </script>
 </body>
