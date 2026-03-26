@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 Premium - Auto Precision v37.0</title>
+    <title>S26 Premium - Auto Precision v38.0</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         :root { --bg: #000; --card: #151515; --blue: #0a84ff; --green: #30d158; --red: #ff453a; --text: #fff; }
@@ -35,13 +35,13 @@
 <div class="container">
     <div class="header">
         <span>S26 <span style="color:#fff;">Premium</span></span>
-        <span class="badge">v37.0 PRECISION</span>
+        <span class="badge">v38.0 SNIPER LOGIC</span>
     </div>
 
     <div class="input-box">
         <div class="row">
             <div style="flex: 1;"><label>출발역</label><input type="text" id="start" value="상일동"></div>
-            <div style="flex: 1;"><label>도착역</label><input type="text" id="dest" value="서울역"></div>
+            <div style="flex: 1;"><label>도착역</label><input type="text" id="dest" value="고덕"></div>
         </div>
         
         <div class="row">
@@ -49,7 +49,7 @@
             <div style="flex: 1;"><label>목표 도착 시각</label><input type="time" id="time" value="10:00"></div>
         </div>
         
-        <button onclick="runPrecisionEngine()"><i class="fas fa-satellite-dish"></i> 실배차 정밀 역산 (자동)</button>
+        <button onclick="runPrecisionEngine()"><i class="fas fa-crosshairs"></i> 스나이퍼 역산 (자동)</button>
     </div>
 
     <div id="result" class="result-card">
@@ -63,9 +63,8 @@
 </div>
 
 <script>
-    // ★ 사용자님이 생성하신 구글 스크립트 웹앱 주소를 꼭 넣어주세요! ★
+    // 사용자님이 직접 구축하신 구글 프록시 터널
     const GOOGLE_PROXY = 'https://script.google.com/macros/s/AKfycbxLWndiEwIbdskJSR1kj3_Zj55bee0Dzoi7Pxet1IkWw46L8mhwGxPYUdx2kYx4bgQUXA/exec';
-    
     const KEY = '597057594f6b696d3438526a7a564e';
     const MARGIN = 10;
 
@@ -88,23 +87,22 @@
         const timeStr = document.getElementById('time').value; 
         
         if (!start || !dest) return alert("출발역과 도착역을 입력하세요.");
-        if (GOOGLE_PROXY.includes("여기에_주소_붙여넣기")) return alert("코드 내부의 GOOGLE_PROXY 변수에 구글 스크립트 주소를 넣어주세요!");
 
         document.getElementById('result').style.display = 'none';
         document.getElementById('log').innerHTML = "";
         
-        printLog(`[정밀 엔진 가동] ${start} ➔ ${dest} (${timeStr} 도착 목표)`);
+        printLog(`[스나이퍼 엔진 가동] ${start} ➔ ${dest} (${timeStr} 도착 목표)`);
 
         try {
             let [targetH, targetM] = timeStr.split(':').map(Number);
             let targetTotalMins = targetH * 60 + targetM;
             
-            // 1차 검색: 소요 시간을 알아내기 위해 목표시간 기준으로 대충 한 번 찌릅니다.
+            // 1차 검색: 소요 시간만 파악하기 위한 가벼운 정찰 핑 (1대만 검색)
             const dummyDate = `${dateStr} 12:00:00`; 
             const probeUrl = `http://openapi.seoul.go.kr:8088/${KEY}/xml/getShtrmPath/1/1/${start}/${dest}/${encodeURIComponent(dummyDate)}/1/%20/%20/Y`;
             const probeFetchUrl = `${GOOGLE_PROXY}?url=${encodeURIComponent(probeUrl)}`;
             
-            printLog("소요 시간 분석 중...");
+            printLog("목표지까지의 순수 소요 시간 스캔 중...");
             const probeRes = await fetch(probeFetchUrl);
             const probeXml = new DOMParser().parseFromString(await probeRes.text(), "text/xml");
             
@@ -114,30 +112,30 @@
             
             const travelTimeSecs = probeXml.getElementsByTagName("totalreqHr")[0]?.textContent;
             const travelMins = Math.ceil(Number(travelTimeSecs) / 60);
-            printLog(`순수 소요 시간: 약 ${travelMins}분`);
+            printLog(`스캔 완료: 소요 시간 약 ${travelMins}분 확인됨.`);
 
-            // 2차 검색: 목표시간에서 소요시간과 버퍼(30분)를 뺀 '진짜 검색 시작 시간' 계산
-            // $$ T_{search} = T_{target} - \Delta t_{travel} - 30\text{min} $$
-            let searchMins = targetTotalMins - travelMins - 30;
+            // 2차 검색: 목표 시각에서 소요 시간과 최소 버퍼(20분)를 뺀 시점을 조준.
+            // 이번엔 서버에 10대의 열차를 요구하여 후보군을 넉넉히 확보합니다.
+            let searchMins = targetTotalMins - travelMins - 20;
             if (searchMins < 0) searchMins += 24 * 60;
             
             const searchTimeStr = `${String(Math.floor(searchMins/60)).padStart(2,'0')}:${String(searchMins%60).padStart(2,'0')}:00`;
             const realDateTime = `${dateStr} ${searchTimeStr}`;
             
-            printLog(`정밀 타격 범위 설정: ${searchTimeStr} 부터 5대 열차 스캔...`);
+            printLog(`정밀 타격 범위: ${searchTimeStr} 부터 10대 연속 스캔...`);
 
-            const realUrl = `http://openapi.seoul.go.kr:8088/${KEY}/xml/getShtrmPath/1/5/${start}/${dest}/${encodeURIComponent(realDateTime)}/1/%20/%20/Y`;
+            // 주의: API의 페이로드 크기를 1/5에서 1/10으로 늘림
+            const realUrl = `http://openapi.seoul.go.kr:8088/${KEY}/xml/getShtrmPath/1/10/${start}/${dest}/${encodeURIComponent(realDateTime)}/1/%20/%20/Y`;
             const realFetchUrl = `${GOOGLE_PROXY}?url=${encodeURIComponent(realUrl)}`;
             
             const res = await fetch(realFetchUrl);
-            const xmlText = await res.text();
-            const xmlDoc = new DOMParser().parseFromString(xmlText, "text/xml");
+            const xmlDoc = new DOMParser().parseFromString(await res.text(), "text/xml");
 
             const paths = xmlDoc.getElementsByTagName("path");
             let bestTrain = null;
             let minDiff = Infinity; 
 
-            // 목표 시간(10:00)을 넘지 않으면서 가장 늦게 도착하는(가장 가까운) 열차 추출
+            // 도착 시각이 목표 시간(10:00) 이하이면서, 그 차이가 가장 작은 '최후의 열차' 선별
             for (let i = 0; i < paths.length; i++) {
                 const arrTime = paths[i].getElementsByTagName("trainArvlTm")[0]?.textContent;
                 const depTime = paths[i].getElementsByTagName("trainDptreTm")[0]?.textContent;
@@ -149,7 +147,7 @@
                 
                 let diff = targetTotalMins - arrTotalMins;
                 
-                // 음수면 목표 시간 초과(지각). 양수이면서 가장 작은 값을 찾음
+                // 음수면 지각. 양수이면서 가장 작은 값(=목표 시각에 가장 딱 맞게 떨어지는 값)
                 if (diff >= 0 && diff < minDiff) {
                     minDiff = diff;
                     bestTrain = { dep: depTime, arr: arrTime };
@@ -157,10 +155,10 @@
             }
 
             if (!bestTrain) {
-                throw new Error("설정하신 시간 내에 도착할 수 있는 배차 데이터가 스캔 범위 내에 없습니다.");
+                throw new Error("설정하신 시간 내에 도착할 수 있는 열차가 없습니다. (첫차 이전이거나 막차 이후)");
             }
 
-            printLog(`✅ 타격 성공: [${bestTrain.dep} 출발 ➔ ${bestTrain.arr} 도착] 열차 픽업 완료.`);
+            printLog(`✅ 타격 성공: [${bestTrain.dep} 출발 ➔ ${bestTrain.arr} 도착] 열차가 가장 완벽합니다!`);
 
             // 10분 마진 적용 역산
             let [dH, dM, dS] = bestTrain.dep.split(':').map(Number);
@@ -176,11 +174,11 @@
             document.getElementById('res-train').innerText = `${start}역 ${bestTrain.dep} 실제 배차 기준 (-${MARGIN}분 마진)`;
             document.getElementById('res-meta').innerHTML = `
                 <b style="color:#fff;">${start} ➔ ${dest}</b><br>
-                목적지 실제 도착 시각: <span style="color:var(--green)">${bestTrain.arr}</span> (목표 시간 통과)<br>
-                소요 시간: 약 ${travelMins}분
+                목적지 실제 도착 시각: <span style="color:var(--green)">${bestTrain.arr}</span> (목표 시간 ${timeStr} 이전)<br>
+                열차 이동 시간: 약 ${travelMins}분
             `;
             
-            printLog("모든 계산 완료.", "#30d158");
+            printLog("모든 계산 및 데이터 바인딩 완료.", "#30d158");
 
         } catch (e) {
             printLog(`에러 발생: ${e.message}`, "#ff453a");
