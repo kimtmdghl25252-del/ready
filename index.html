@@ -52,7 +52,7 @@
 
 <div class="container">
     <div id="header-badge">
-        <span class="badge">vFinal (엔진 패치)</span>
+        <span class="badge">v62.0</span>
     </div>
 
     <div class="input-box">
@@ -62,7 +62,7 @@
         </div>
 
         <input type="text" id="dest" value="천호보건지소" placeholder="최종 목적지 입력">
-        <input type="time" id="time" value="22:02">
+        <input type="time" id="time" value="10:02">
         
         <button onclick="startEngine()"><i class="fas fa-route"></i> 최적 경로 연산 시작</button>
     </div>
@@ -134,7 +134,7 @@
     function cleanStationName(name) { return name.split(' ')[0].split('(')[0].replace(/역$/, '').trim(); }
     function calcRealWalkMins(straightDistance) { return Math.ceil((straightDistance * 1.35) / 67); }
 
-    // Chart.js 온도 기준선 커스텀 플러그인
+    // Chart.js 온도 기준선 플러그인 (화면에 보이는 영역에만 표시)
     const tempThresholdPlugin = {
         id: 'tempThresholds',
         beforeDraw: (chart) => {
@@ -143,7 +143,8 @@
             const thresholds = [4, 8, 11, 16, 19, 22, 27];
             thresholds.forEach(val => {
                 const yPos = y.getPixelForValue(val);
-                if (yPos >= top && yPos <= bottom) {
+                // 차트 영역의 최상단/최하단을 벗어나지 않는 선만 그려줍니다.
+                if (yPos > top && yPos < bottom) {
                     ctx.beginPath();
                     ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
                     ctx.lineWidth = 1;
@@ -160,14 +161,14 @@
         }
     };
 
-    // Chart.js 강수 확률 40% 기준선 커스텀 플러그인
+    // Chart.js 강수 확률 40% 기준선 플러그인
     const popThresholdPlugin = {
         id: 'popThreshold',
         beforeDraw: (chart) => {
             const { ctx, chartArea: { top, right, bottom, left }, scales: { y } } = chart;
             ctx.save();
             const yPos = y.getPixelForValue(40);
-            if (yPos >= top && yPos <= bottom) {
+            if (yPos > top && yPos < bottom) {
                 ctx.beginPath();
                 ctx.strokeStyle = 'rgba(255, 69, 58, 0.6)';
                 ctx.lineWidth = 1;
@@ -228,7 +229,8 @@
                 }
 
                 if(!bestRoute) throw new Error("경로를 연산할 수 없습니다.");
-                const limitMins = targetMins - bestRoute.walk; // 모드 A: 도보 차감
+                const limitMins = targetMins - bestRoute.walk; 
+                
                 let train = await fetchRealTrainSilent(bestRoute.name, limitMins, bestRoute.subMins);
                 
                 if(train) {
@@ -238,7 +240,6 @@
             } else {
                 let walk15Stations = allStations.filter(s => s.walk <= 15);
                 
-                // 역이 없거나 1개일 땐 모드 A로 강제 폴백
                 if (walk15Stations.length <= 1) {
                     let stn = allStations[0]; let subMins = 30; 
                     try {
@@ -254,8 +255,7 @@
                     if(train) renderFinalResult({ stn: stn, c: limitMins, d: train.depM, train: train, targetTime, routeMode: 'A' });
                 } else {
                     let validOptions = [];
-                    // 모드 B 연산: 도보 시간은 역산에 사용하지 않음 (limitMins = targetMins)
-                    for(let stn of walk15Stations.slice(0, 4)) {
+                    const promises = walk15Stations.slice(0, 4).map(async (stn) => {
                         let subMins = 30; 
                         try {
                             const dateStr = new Date().toISOString().slice(0,10);
@@ -265,12 +265,15 @@
                             if (xml.getElementsByTagName("resultCode")[0]?.textContent === "00") subMins = Math.ceil(Number(xml.getElementsByTagName("totalreqHr")[0]?.textContent) / 60);
                         } catch(e) {}
 
-                        let limitMins = targetMins; 
+                        let limitMins = targetMins; // 도보 무시 (역 도착 기준)
+                        
                         let train = await fetchRealTrainSilent(stn.name, limitMins, subMins); 
                         if(train) {
                             validOptions.push({ stn: stn, c: limitMins, d: train.depM, train: train, targetTime, routeMode: 'B' });
                         }
-                    }
+                    });
+
+                    await Promise.all(promises);
 
                     if(validOptions.length === 0) throw new Error("적합한 배차표를 찾을 수 없습니다.");
                     validOptions.sort((a, b) => b.d - a.d);
@@ -287,7 +290,7 @@
                         finalOptions.forEach((opt, idx) => {
                             html += `<button class="station-btn" onclick="selectOption(${idx})">
                                 <div style="text-align:left;">
-                                    <div style="font-size:15px; margin-bottom:4px;"><i class="fas fa-subway"></i> ${opt.stn.name}역 하차</div>
+                                    <div style="font-size:15px; margin-bottom:4px;"><i class="fas fa-subway"></i> ${opt.stn.name}역 도착 목표</div>
                                     <div style="font-size:12px; color:#aaa;">(선택 창에서만 참고용: 도보 ${opt.stn.walk}분)</div>
                                 </div>
                                 <div style="text-align:right;">
@@ -307,7 +310,6 @@
         }
     }
 
-    // [vFinal] subMins를 활용해 정확한 시간에 스캔 윈도우를 열고, path 파싱 버그 수정 완료
     async function fetchRealTrainSilent(stnName, limitMins, subMins) {
         const expectedDepMins = limitMins - subMins;
         const d = new Date();
@@ -316,16 +318,16 @@
         const offsets = [-30, -15, 0, 10];
         let allTrains = [];
 
-        for(let off of offsets) {
+        const promises = offsets.map(async (off) => {
             let reqMins = expectedDepMins + off;
             let reqTimeStr = minsToHm(reqMins) + ':00';
+            
             let apiUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/100/상일동/${stnName}/${dateStr} ${reqTimeStr}/1/%20/%20/Y`;
             try {
                 let res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(apiUrl)}`);
                 let xmlText = await res.text();
                 let xml = new DOMParser().parseFromString(xmlText, "text/xml");
                 
-                // 프랑켄슈타인 파싱 버그 픽스: 전체에서 뽑지 않고 각각의 path 태그 안에서 짝을 맞춤
                 let paths = xml.getElementsByTagName("path");
                 for (let i = 0; i < paths.length; i++) {
                     let deps = paths[i].getElementsByTagName("trainDptreTm");
@@ -337,7 +339,9 @@
                     }
                 }
             } catch(e) {}
-        }
+        });
+
+        await Promise.all(promises);
 
         let bestTrain = null; 
         let minDiff = Infinity;
@@ -370,7 +374,6 @@
         
         const arrStr = opt.train.arr.substring(0, 5); 
         
-        // ★ 모드 A와 B의 결과창 UI 완벽 분리 (모드 B에선 도보 완전 삭제) ★
         if (opt.routeMode === 'A') {
             const arrTimeArr = opt.train.arr.split(':').map(Number);
             const arrMins = arrTimeArr[0] * 60 + arrTimeArr[1];
@@ -423,14 +426,15 @@
             document.getElementById('w-temp-min').innerText = minT;
             document.getElementById('w-clothes').innerHTML = `${recommendations.join('<br>')}`;
             
-            // 온도 차트 여백 확보
-            const yMinTemp = Math.min(minT - 2, 0);
-            const yMaxTemp = Math.max(maxT + 2, 30);
+            // ★ 수정: Y축을 항상 0~30으로 고정하지 않고, 데이터 최솟값-2 ~ 최댓값+2 로 타이트하게 줌인 설정
+            const yMinTemp = minT - 2;
+            const yMaxTemp = maxT + 2;
 
             if(tempChart) tempChart.destroy();
             tempChart = new Chart(document.getElementById('tempChart'), {
                 type: 'line',
                 data: { labels: labels, datasets: [{ data: temps, borderColor: '#ff9f0a', backgroundColor: 'rgba(255,159,10,0.1)', borderWidth: 2, pointBackgroundColor: '#ff9f0a', fill: true, tension: 0.4 }] },
+                // options에서 줌인된 스케일(yMinTemp, yMaxTemp)을 사용합니다.
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: yMinTemp, max: yMaxTemp, ticks: {color: '#888'}, grid: {color: '#333'} }, x: { ticks: {color: '#888'}, grid: {display: false} } } },
                 plugins: [tempThresholdPlugin]
             });
