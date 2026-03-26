@@ -3,102 +3,184 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 Debugger v34.0</title>
+    <title>S26 Premium - Hybrid Engine</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { margin: 0; background: #000; color: #fff; font-family: 'Cascadia Code', monospace; padding: 20px; font-size: 14px; }
-        .box { background: #111; border: 1px solid #333; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
-        textarea { width: 100%; height: 150px; background: #000; border: 1px solid #444; border-radius: 8px; padding: 15px; color: #0f0; font-family: monospace; font-size: 12px; box-sizing: border-box; margin-bottom: 15px; outline: none; }
-        button { background: #0a84ff; color: #fff; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 8px; font-size: 16px; }
-        #log { background: #050505; border: 1px solid #222; padding: 15px; height: 300px; overflow-y: auto; color: #0f0; line-height: 1.6; font-size: 12px; border-radius: 8px; }
+        :root { --bg: #000; --card: #151515; --blue: #0a84ff; --green: #30d158; --red: #ff453a; --text: #fff; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        
+        .header { font-size: 24px; font-weight: 900; color: var(--blue); margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; }
+        .badge { font-size: 10px; background: #333; padding: 4px 8px; border-radius: 6px; color: var(--green); letter-spacing: 1px; }
+
+        .section { background: var(--card); border: 1px solid #333; border-radius: 20px; padding: 20px; margin-bottom: 20px; }
+        .step-title { font-size: 13px; color: var(--blue); margin-bottom: 15px; font-weight: 900; }
+        
+        label { display: block; font-size: 12px; color: #888; margin-bottom: 8px; font-weight: bold; }
+        input { width: 100%; background: #000; border: 1px solid #444; border-radius: 10px; padding: 12px; color: #fff; font-size: 14px; box-sizing: border-box; margin-bottom: 15px; outline: none; }
+        
+        .btn { width: 100%; padding: 15px; border-radius: 12px; border: none; background: var(--blue); color: #fff; font-weight: 900; font-size: 15px; cursor: pointer; transition: 0.2s; margin-bottom: 10px; display: block; text-align: center; text-decoration: none; box-sizing: border-box; }
+        .btn-green { background: var(--green); color: #000; }
+        
+        textarea { width: 100%; height: 80px; background: #000; border: 1px solid #444; border-radius: 10px; padding: 10px; color: #0f0; font-family: monospace; font-size: 11px; box-sizing: border-box; resize: vertical; margin-bottom: 10px; }
+
+        .result-card { background: linear-gradient(145deg, #1a1a1c, #000); border: 1px solid var(--blue); border-radius: 24px; padding: 30px 20px; text-align: center; display: none; }
+        .door-time { font-size: 70px; font-weight: 900; color: var(--blue); letter-spacing: -3px; line-height: 1; margin: 15px 0; }
+        .train-info { font-size: 16px; color: var(--green); font-weight: bold; margin-bottom: 15px; }
+        .meta-info { font-size: 13px; color: #777; border-top: 1px solid #222; padding-top: 15px; line-height: 1.6; }
+
+        #log { background: #050505; border: 1px solid #222; padding: 15px; height: 150px; overflow-y: auto; color: #0f0; font-size: 11px; margin-top: 20px; border-radius: 8px; font-family: 'Cascadia Code', monospace; line-height: 1.5; }
     </style>
 </head>
 <body>
 
-    <h2 style="color: #0a84ff; margin-top: 0;">S26 엑스레이 스캐너 v34.0</h2>
-    
-    <div class="box">
-        <label style="color:#aaa; font-weight:bold; font-size:12px; display:block; margin-bottom:10px;">가져오신 데이터를 그대로 붙여넣으세요.</label>
-        <textarea id="data-input" placeholder="여기에 붙여넣기..."></textarea>
-        <button onclick="scanData()">데이터 내부 구조 스캔</button>
+<div class="container">
+    <div class="header">
+        <span>S26 <span style="color:#fff;">Premium</span></span>
+        <span class="badge">DEBUG MODE ON</span>
     </div>
 
-    <div id="log">데이터를 기다리는 중...</div>
+    <div class="section">
+        <div class="step-title">STEP 1. 목적지 및 시간 설정</div>
+        <label>도착역 (예: 서울역, 강남)</label>
+        <input type="text" id="dest" value="서울역">
+        
+        <div style="display: flex; gap: 10px;">
+            <div style="flex: 1;"><label>조회 날짜</label><input type="date" id="date"></div>
+            <div style="flex: 1;"><label>승강장 도착 기준 시각</label><input type="time" id="time"></div>
+        </div>
+        
+        <p style="font-size: 11px; color: #666; margin-top: 0;">※ 팁: '오후 2시까지 도착'을 원하시면, 소요시간(약 45분)을 고려해 '오후 1시'로 검색하세요.</p>
+        
+        <button class="btn" onclick="generateAndOpenURL()"><i class="fas fa-external-link-alt"></i> 서울시 원본 데이터 뽑기 (새 창)</button>
+    </div>
+
+    <div class="section">
+        <div class="step-title">STEP 2. 데이터 주입 및 시간 역산</div>
+        <textarea id="xml-input" placeholder="새 창에 뜬 알수없는 영어들(XML)을 전체 복사해서 여기에 붙여넣으세요!"></textarea>
+        <button class="btn btn-green" onclick="calculateFromXML()"><i class="fas fa-calculator"></i> 현관문 출발 시간 계산</button>
+    </div>
+
+    <div id="result" class="result-card">
+        <div style="font-size: 14px; color: #aaa; font-weight: bold;">이 열차를 타기 위한 현관문 출발 시각</div>
+        <div id="res-door" class="door-time">--:--</div>
+        <div id="res-train" class="train-info"></div>
+        <div id="res-meta" class="meta-info"></div>
+    </div>
+
+    <div id="log">시스템 준비 완료. STEP 1부터 진행해주세요.</div>
+</div>
 
 <script>
-    function printLog(msg, color = "#0f0") {
+    const KEY = '597057594f6b696d3438526a7a564e';
+    const START = "상일동";
+    const MARGIN = 10;
+
+    window.onload = () => {
+        const now = new Date();
+        document.getElementById('date').value = now.toISOString().slice(0, 10);
+        document.getElementById('time').value = now.toTimeString().slice(0, 5);
+    };
+
+    function printLog(msg, type = "") {
         const logBox = document.getElementById('log');
-        logBox.innerHTML += `<div style="color:${color}; margin-bottom:4px;">> ${msg}</div>`;
+        let color = "#0f0";
+        if (type === "error") color = "var(--red)";
+        if (type === "warning") color = "#ff9f0a";
+        
+        const timeStr = new Date().toLocaleTimeString();
+        logBox.innerHTML += `<div style="color:${color}; margin-bottom:4px;">[${timeStr}] ${msg}</div>`;
         logBox.scrollTop = logBox.scrollHeight;
     }
 
-    function scanData() {
-        const text = document.getElementById('data-input').value.trim();
-        document.getElementById('log').innerHTML = ""; 
+    // STEP 1: 완벽한 URL을 생성하고 새 탭으로 여는 함수
+    function generateAndOpenURL() {
+        const dest = document.getElementById('dest').value.trim();
+        const date = document.getElementById('date').value; // YYYY-MM-DD
+        const time = document.getElementById('time').value; // HH:MM
+        
+        if (!dest) return alert("도착역을 입력하세요.");
 
-        if (!text) {
-            printLog("오류: 데이터가 비어있습니다.", "#ff453a");
+        // API가 요구하는 형식: "2026-03-26 14:00:00" -> 인코딩: "2026-03-26%2014:00:00"
+        const formattedDateTime = `${date} ${time}:00`;
+        const encodedDateTime = encodeURIComponent(formattedDateTime);
+        
+        // 공백(%20)과 대문자 Y를 완벽하게 조합한 최종 주소
+        const targetUrl = `http://openapi.seoul.go.kr:8088/${KEY}/xml/getShtrmPath/1/5/${START}/${dest}/${encodedDateTime}/1/%20/%20/Y`;
+        
+        printLog(`생성된 API 주소: ${targetUrl}`);
+        printLog("새 창에서 서울시 서버로 직접 접속합니다. (CORS 우회 완료)", "warning");
+        
+        window.open(targetUrl, '_blank');
+    }
+
+    // STEP 2: 복사해 온 데이터를 해석하고 계산하는 함수
+    function calculateFromXML() {
+        const xmlText = document.getElementById('xml-input').value.trim();
+        document.getElementById('result').style.display = 'none';
+        printLog("----------------------------------");
+        
+        if (!xmlText) {
+            printLog("오류: 입력된 데이터가 없습니다.", "error");
             return;
         }
 
-        // 1. JSON vs XML 판별
-        if (text.startsWith("{") || text.startsWith("[")) {
-            printLog("❌ 경고: 이 데이터는 XML이 아니라 JSON 형식입니다!", "#ff453a");
-            printLog("테스트 페이지에서 출력 형식을 XML로 바꾸셨는지 확인해주세요.", "#ff9f0a");
+        printLog("데이터 구조 분석 시작...");
+
+        try {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+
+            const resultCode = xmlDoc.getElementsByTagName("resultCode")[0]?.textContent;
+            if (resultCode && resultCode !== "00") {
+                const msg = xmlDoc.getElementsByTagName("resultMsg")[0]?.textContent;
+                throw new Error(`서울시 서버가 거부했습니다: ${msg}`);
+            }
+
+            const trainTimeNode = xmlDoc.getElementsByTagName("trainDptreTm")[0];
+            if (!trainTimeNode || !trainTimeNode.textContent) {
+                throw new Error("<trainDptreTm> 필드가 없습니다. 날짜나 역 이름(예: 서울역)이 정확한지 확인하세요.");
+            }
+
+            const trainTime = trainTimeNode.textContent; // 예: "14:04:00"
+            const travelTime = xmlDoc.getElementsByTagName("totalreqHr")[0]?.textContent || "0"; 
+            const destNode = xmlDoc.getElementsByTagName("arvlStn");
+            const finalDest = destNode.length > 0 ? destNode[destNode.length - 1].getElementsByTagName("stnNm")[0]?.textContent : "도착역";
+
+            printLog(`데이터 확인! 실제 열차 출발 시간: ${trainTime}`);
+
+            // 수학적 역산
+            let [h, m, s] = trainTime.split(':').map(Number);
+            let totalMins = (h * 60 + m) - MARGIN;
             
-            try {
-                const jsonObj = JSON.parse(text);
-                printLog(`JSON 최상위 키값: ${Object.keys(jsonObj).join(', ')}`, "#30d158");
-            } catch(e) {
-                printLog("하지만 JSON 규격도 깨져있습니다.", "#ff453a");
-            }
-            return;
-        }
+            // 날짜/시간 보정 (음수가 나올 경우 전날로 계산)
+            if (totalMins < 0) totalMins += 24 * 60;
+            
+            let doorH = Math.floor(totalMins / 60);
+            let doorM = totalMins % 60;
 
-        // 2. XML 스캔
-        printLog("XML 형식 감지됨. 구조 분해 시작...", "#0a84ff");
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(text, "text/xml");
+            // 결과 출력
+            document.getElementById('result').style.display = 'block';
+            document.getElementById('res-door').innerText = `${String(doorH).padStart(2,'0')}:${String(doorM).padStart(2,'0')}`;
+            document.getElementById('res-train').innerText = `상일동역 ${trainTime} 출발 열차 기준`;
+            
+            // 예상 도착 시각 계산 로직
+            let arrMins = (h * 60 + m) + Math.ceil(Number(travelTime) / 60);
+            let arrH = Math.floor(arrMins / 60) % 24;
+            let arrM = arrMins % 60;
 
-        // 에러 태그 확인
-        if (xmlDoc.getElementsByTagName("parsererror").length > 0) {
-            printLog("❌ 치명적 오류: 올바른 XML 형식이 아닙니다. 데이터가 잘렸을 수 있습니다.", "#ff453a");
-            return;
-        }
+            document.getElementById('res-meta').innerHTML = `
+                <b style="color:#fff;">${START} ➔ ${finalDest}</b><br>
+                목적지 예상 도착 시각: 약 ${String(arrH).padStart(2,'0')}:${String(arrM).padStart(2,'0')}<br>
+                순수 이동 시간: ${Math.ceil(Number(travelTime)/60)}분
+            `;
 
-        // 모든 태그 수집 (중복 제거)
-        const allElements = xmlDoc.getElementsByTagName("*");
-        const tagSet = new Set();
-        for (let i = 0; i < allElements.length; i++) {
-            tagSet.add(allElements[i].tagName);
-        }
-        const uniqueTags = Array.from(tagSet);
+            printLog("역산 알고리즘 완료. 결과를 확인하세요.");
 
-        printLog(`총 ${uniqueTags.length}종류의 데이터 필드가 발견되었습니다.`, "#30d158");
-        printLog(`------------------------------------`, "#555");
-        printLog(uniqueTags.join(", "), "#aaa");
-        printLog(`------------------------------------`, "#555");
-
-        // 핵심 변수 팩트 체크
-        const hasTrainTime = uniqueTags.includes("trainDptreTm");
-        const hasTravelTime = uniqueTags.includes("totalreqHr") || uniqueTags.includes("shtTravelTm");
-        const hasRealtime = uniqueTags.includes("realtimeStationArrival");
-
-        if (hasRealtime) {
-            printLog("❌ 진단: 이것은 '실시간 도착' API의 결과물입니다. (최단경로가 아님)", "#ff453a");
-        } else if (hasTrainTime) {
-            printLog("✅ 진단: <trainDptreTm>가 존재합니다! 정상적인 최단경로 데이터입니다.", "#30d158");
-            const val = xmlDoc.getElementsByTagName("trainDptreTm")[0].textContent;
-            printLog(`첫 번째 열차 시간값: [${val}]`, "#0a84ff");
-        } else {
-            printLog("❌ 진단: 역시 <trainDptreTm>가 없습니다.", "#ff453a");
-            if (hasTravelTime) {
-                printLog("소요 시간 데이터는 있지만, 출발 시간표는 서버가 고의로 주지 않았습니다.", "#ff9f0a");
-                printLog("이유 1: 검색하신 시간에 운행하는 열차가 없을 수 있습니다.", "#ff9f0a");
-                printLog("이유 2: 검색일시 포맷이 틀렸을 수 있습니다. (예: 202603261400 형식)", "#ff9f0a");
-            }
+        } catch (e) {
+            printLog(`에러 발생: ${e.message}`, "error");
         }
     }
 </script>
-
 </body>
 </html>
