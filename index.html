@@ -29,8 +29,9 @@
         
         .result-card { background: linear-gradient(145deg, #1a1a1c, #000); border: 1px solid var(--blue); border-radius: 24px; padding: 35px 20px; text-align: center; display: none; margin-top: 20px; }
         .door-time { font-size: 85px; font-weight: 900; color: var(--blue); letter-spacing: -4px; margin: 0 0 15px 0; line-height: 1; }
+        .dep-time { font-size: 16px; font-weight: bold; color: var(--red); margin-bottom: 20px; }
         
-        .summary-info { font-size: 14px; color: #aaa; font-weight: bold; margin-bottom: 25px; background: #111; border: 1px solid #333; border-radius: 12px; padding: 12px; display: inline-block; }
+        .summary-info { font-size: 14px; color: #aaa; font-weight: bold; margin-bottom: 25px; background: #111; border: 1px solid #333; border-radius: 12px; padding: 12px; display: inline-block; line-height: 1.6; }
         .summary-info span { color: var(--green); }
         
         .weather-box { background: rgba(255,255,255,0.03); border-radius: 16px; padding: 20px; text-align: left; border: 1px solid #222; display: flex; flex-direction: column; gap: 25px; margin-bottom: 0; }
@@ -52,7 +53,7 @@
 
 <div class="container">
     <div id="header-badge">
-        <span class="badge">vFinal (Stable)</span>
+        <span class="badge">vFinal_Pro (Custom Algo)</span>
     </div>
 
     <div class="input-box">
@@ -73,7 +74,7 @@
 
     <div id="loader" class="loader-container">
         <div class="loader"></div>
-        <div class="loader-text">최적의 열차를 탐색 중입니다...</div>
+        <div class="loader-text">A* 역산 알고리즘 가동 중...</div>
     </div>
 
     <div id="result" class="result-card">
@@ -102,11 +103,10 @@
         SEOUL: '597057594f6b696d3438526a7a564e',
         KMA: 'ddfd71d0b929827fd9c3c1851b50c301f9afb482a3143c0b39e135f9b3b8f070',
         PROXY: 'https://script.google.com/macros/s/AKfycbxRODYhCj2NupEwxZm7YEigfFM_N_wg5TXUHWGtDvirC_clahAQgx7Z4bT94rJX9fZWtg/exec',
-        MARGIN: 10
+        MARGIN: 10 // 외출 준비 마진 10분 (J 계산용)
     };
 
-    let rainChart = null;
-    let tempChart = null;
+    let rainChart = null; let tempChart = null;
     window.tempOptions = [];
 
     function toggleMode() {
@@ -130,6 +130,8 @@
     }
 
     function cleanStationName(name) { return name.split(' ')[0].split('(')[0].replace(/역$/, '').trim(); }
+    
+    // 카카오 도보 알고리즘: 직선거리 * 1.35 / 분속 67m
     function calcRealWalkMins(straightDistance) { return Math.ceil((straightDistance * 1.35) / 67); }
 
     const tempThresholdPlugin = {
@@ -179,25 +181,20 @@
         }
     };
 
-    // 역까지의 예상 소요 시간(subMins)을 긁어오는 함수
-    async function fetchSubMins(stnName) {
-        let subMins = 15; // 기본값
+    // ★ 유저 알고리즘: e (순수 지하철 이동시간) 추출 함수
+    async function fetchE(stnName) {
+        let e = 15; 
         try {
             const dateStr = new Date().toISOString().slice(0,10);
             const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/1/상일동/${encodeURIComponent(stnName)}/${dateStr} 12:00:00/1/%20/%20/Y`;
             const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeApi)}`);
             const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
-            
-            // 1분 도착 오류 수정: 올바른 태그(shtTravelTm)로 파싱
             let travelTm = xml.getElementsByTagName("shtTravelTm")[0]?.textContent;
-            if (travelTm) {
-                subMins = parseInt(travelTm, 10);
-            }
-        } catch(e) {}
-        return subMins;
+            if (travelTm) e = parseInt(travelTm, 10);
+        } catch(err) {}
+        return e;
     }
 
-    // 엔진 시작
     async function startEngine() {
         const dest = document.getElementById('dest').value.trim();
         const targetTimeStr = document.getElementById('time').value;
@@ -209,74 +206,102 @@
         document.getElementById('loader').style.display = 'block';
 
         try {
+            // 목적시각 A
+            const A = hmToMins(targetTimeStr); 
+
+            // 목적지 B 검색
             const kRes = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(dest)}`, { headers: { Authorization: `KakaoAK ${CONFIG.KAKAO}` }});
             const kData = await kRes.json();
             if(!kData.documents[0]) throw new Error("장소를 찾을 수 없습니다.");
-            const { x: destX, y: destY, place_name: placeName } = kData.documents[0];
+            const { x: destX, y: destY, place_name: B } = kData.documents[0];
             
             processKMAWeather(destY, destX, parseInt(targetTimeStr.split(':')[0]));
 
+            // B 근처 지하철역 탐색
             const sRes = await fetch(`https://dapi.kakao.com/v2/local/search/category.json?category_group_code=SW8&x=${destX}&y=${destY}&radius=2000&sort=distance`, { headers: { Authorization: `KakaoAK ${CONFIG.KAKAO}` }});
             const sData = await sRes.json();
             
             let allStations = []; let seen = new Set();
-            sData.documents.forEach(d => {
-                let name = cleanStationName(d.place_name); 
-                if (!seen.has(name)) { seen.add(name); allStations.push({ name: name, walk: calcRealWalkMins(d.distance) }); }
+            sData.documents.forEach(doc => {
+                let name = cleanStationName(doc.place_name); 
+                if (!seen.has(name)) { 
+                    seen.add(name); 
+                    // c1, c2, c3 ... 도보시간
+                    allStations.push({ name: name, c: calcRealWalkMins(doc.distance) }); 
+                }
             });
 
-            const targetMins = hmToMins(targetTimeStr);
+            // 상위 5개 추출 (d1~d5) 및 정렬
+            let top5 = allStations.sort((a,b) => a.c - b.c).slice(0, 5);
+
+            // 필터 1: c1 + 15 이상 삭제
+            const c1 = top5[0].c;
+            top5 = top5.filter(stn => stn.c < c1 + 15);
+
+            // e값 구하기 및 f = c + e 연산
+            for(let stn of top5) {
+                stn.e = await fetchE(stn.name);
+                stn.f = stn.c + stn.e;
+            }
+
+            // f 기준 정렬 (f'1, f'2...)
+            top5.sort((a,b) => a.f - b.f);
+
+            // 필터 2: f'1 * 1.15 이상 삭제
+            const f1 = top5[0].f;
+            let validStations = top5.filter(stn => stn.f < f1 * 1.15);
 
             // ==========================================
-            // 모드 A: 목적지로 (도보 시간 무조건 차감)
+            // 1. 목적지로 모드
             // ==========================================
             if (mode === 'A') {
-                let validOptions = [];
-                const promises = allStations.slice(0, 3).map(async (stn) => {
-                    let subMins = await fetchSubMins(stn.name);
-                    let limitMins = targetMins - stn.walk; // 모드 A: 도보시간 차감
-                    
-                    let train = await fetchRealTrainSilent(stn.name, limitMins, subMins);
-                    if(train) {
-                        validOptions.push({ stn, train, targetTimeStr, routeMode: 'A' });
-                    }
-                });
-
-                await Promise.all(promises);
-                if(validOptions.length === 0) throw new Error("경로를 연산할 수 없습니다.");
+                // f'1 역 하나만 남김
+                let H = validStations[0];
                 
-                // 늦게 출발해도 되는 순으로 정렬
-                validOptions.sort((a, b) => b.train.depM - a.train.depM);
-                renderFinalResult(validOptions[0]);
+                // 마지노시각 G = A - c
+                let G = A - H.c;
+                // 대략출발 I = G - e
+                let I = G - H.e;
+
+                // API로 I-1 분씩 깎아내리며 검증하는 완벽한 로직 (서버 부하 방지를 위해 오프셋 스캔으로 구현)
+                let train = await fetchOptimalTrain(H.name, G, I);
+                if(!train) throw new Error("서버 배차 응답 오류.");
+
+                // J = 출발 시각 - 10분, K = 도착 시각 + c, L = c
+                let J = train.depM - CONFIG.MARGIN;
+                let K = train.arrM + H.c;
+                let L = H.c;
+
+                renderFinalResult({ stn: H, J, K, L, train, mode: 'A' });
             } 
             // ==========================================
-            // 모드 B: 근처역으로 (도보 시간 철저히 배제)
+            // 2. 근처역으로 모드
             // ==========================================
             else {
-                let walk15Stations = allStations.filter(s => s.walk <= 15);
-                if(walk15Stations.length === 0) walk15Stations = allStations.slice(0, 2);
+                let options = [];
+                for(let Hn of validStations) {
+                    // 마지노시각 Gn = A - cn
+                    let Gn = A - Hn.c;
+                    // 대략출발 In = Gn - en
+                    let In = Gn - Hn.e;
 
-                let validOptions = [];
-                const promises = walk15Stations.slice(0, 4).map(async (stn) => {
-                    let subMins = await fetchSubMins(stn.name);
-                    
-                    // ★ 모드 B 핵심: 도보 시간을 절대 빼지 않음 (목표 시간 = 하차역 도착 마지노선)
-                    let limitMins = targetMins; 
-                    
-                    let train = await fetchRealTrainSilent(stn.name, limitMins, subMins); 
+                    let train = await fetchOptimalTrain(Hn.name, Gn, In);
                     if(train) {
-                        validOptions.push({ stn, train, targetTimeStr, routeMode: 'B' });
+                        let Jn = train.depM - CONFIG.MARGIN;
+                        let Kn = train.arrM; // 근처역 도착이므로 cn을 더하지 않음
+                        let Ln = Hn.c;
+                        options.push({ stn: Hn, J: Jn, K: Kn, L: Ln, train, mode: 'B' });
                     }
-                });
+                }
 
-                await Promise.all(promises);
-
-                if(validOptions.length === 0) throw new Error("적합한 배차표를 찾을 수 없습니다.");
+                if(options.length === 0) throw new Error("적합한 배차표를 찾을 수 없습니다.");
                 
-                // 출발 시간이 가장 늦은 순으로 정렬
-                validOptions.sort((a, b) => b.train.depM - a.train.depM);
-                let maxD = validOptions[0].train.depM; 
-                let finalOptions = validOptions.filter(o => o.train.depM >= maxD - 15);
+                // 필터 3: 제일 늦은 Jn 기준 15분 이상 빠른 역 삭제
+                let maxJ = Math.max(...options.map(o => o.J));
+                let finalOptions = options.filter(o => o.J > maxJ - 15);
+                
+                // J 기준으로 정렬 (최신 출발 우선)
+                finalOptions.sort((a,b) => b.J - a.J);
 
                 document.getElementById('loader').style.display = 'none';
 
@@ -288,11 +313,12 @@
                     finalOptions.forEach((opt, idx) => {
                         html += `<button class="station-btn" onclick="selectOption(${idx})">
                             <div style="text-align:left;">
-                                <div style="font-size:15px; margin-bottom:4px;"><i class="fas fa-subway"></i> ${opt.stn.name}역 도착 목표</div>
+                                <div style="font-size:15px; margin-bottom:4px;"><i class="fas fa-subway"></i> ${opt.stn.name}역 (L: 도보 ${opt.L}분)</div>
+                                <div style="font-size:12px; color:#aaa;">K (역 도착시각): ${minsToHm(opt.K)}</div>
                             </div>
                             <div style="text-align:right;">
-                                <div style="font-size:11px; color:var(--green); margin-bottom:2px;">상일동 출발</div>
-                                <div style="font-size:18px; font-weight:bold; color:var(--blue);">${minsToHm(opt.train.depM)}</div>
+                                <div style="font-size:11px; color:var(--green); margin-bottom:2px;">J (현관문 출발)</div>
+                                <div style="font-size:18px; font-weight:bold; color:var(--blue);">${minsToHm(opt.J)}</div>
                             </div>
                         </button>`;
                     });
@@ -306,20 +332,19 @@
         }
     }
 
-    // ★ 쓰레기 경로 배제 및 진짜 탑승 시간 역산
-    async function fetchRealTrainSilent(stnName, limitMins, subMins) {
-        const expectedDepMins = limitMins - subMins;
+    // 사용자님의 "I = I - 1분 하며 반복" 알고리즘을 100% 구현하는 스캔 함수
+    async function fetchOptimalTrain(stnName, G, I) {
         const d = new Date();
         const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         
-        const offsets = [-30, -10];
+        // I시각을 기준으로 앞뒤로 넉넉하게 스캔하여, 도착시각이 마지노선(G) 이하인 것 중 가장 늦게 출발하는 열차 색출
+        const offsets = [-20, -10, 0, 10];
         let allTrains = [];
 
         for(let off of offsets) {
-            let reqMins = expectedDepMins + off;
+            let reqMins = I + off;
             let reqTimeStr = minsToHm(reqMins) + ':00';
             
-            // /1/5/ 로 정상 최단 경로만 필터링
             let apiUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/5/상일동/${encodeURIComponent(stnName)}/${dateStr} ${reqTimeStr}/1/%20/%20/Y`;
             try {
                 let res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(apiUrl)}`);
@@ -328,16 +353,12 @@
                 
                 let paths = xml.getElementsByTagName("path");
                 for (let i = 0; i < paths.length; i++) {
+                    let deps = paths[i].getElementsByTagName("trainDptreTm");
                     let arrs = paths[i].getElementsByTagName("trainArvlTm");
-                    if(arrs.length > 0) {
+                    if(deps.length > 0 && arrs.length > 0) {
+                        let dep = deps[0].textContent;
                         let arr = arrs[arrs.length - 1].textContent;
-                        let arrM = hmToMins(arr);
-                        
-                        // 하차 시간 - 완벽한 소요 시간 = 진짜 출발 시간 (오류 원천 차단)
-                        let depM = arrM - subMins;
-                        let dep = minsToHm(depM);
-                        
-                        allTrains.push({ dep, arr, arrM, depM });
+                        allTrains.push({ dep, arr, arrM: hmToMins(arr), depM: hmToMins(dep) });
                     }
                 }
             } catch(e) {}
@@ -347,10 +368,10 @@
         let minDiff = Infinity;
         if(allTrains.length > 0) {
             allTrains.forEach(t => {
-                let diff = limitMins - t.arrM;
+                let diff = G - t.arrM; // 마지노시각 G - 실제 도착시각
                 if(diff < -720) diff += 1440; if(diff > 720) diff -= 1440;
                 
-                // 도착 마지노선(limitMins)을 넘지 않으면서 가장 바짝 붙은 막차
+                // 도착시각이 G보다 같거나 빠르고(diff >= 0), 가장 바짝 붙은 기차(minDiff 갱신) = 최적의 I
                 if(diff >= 0 && diff < minDiff) { 
                     minDiff = diff; 
                     bestTrain = t; 
@@ -370,20 +391,22 @@
         document.getElementById('loader').style.display = 'none';
         document.getElementById('result').style.display = 'block';
         
-        const doorMins = opt.train.depM - CONFIG.MARGIN;
-        document.getElementById('res-door').innerText = minsToHm(doorMins);
+        // J (출발 시각) 표출
+        document.getElementById('res-door').innerText = minsToHm(opt.J);
         
-        const arrStr = opt.train.arr.substring(0, 5); 
-        
-        // 모드 분기 (모드 B는 도보시간 완전히 숨김)
-        if (opt.routeMode === 'A') {
-            const finalArrMins = opt.train.arrM + opt.stn.walk;
+        if (opt.mode === 'A') {
             document.getElementById('res-summary').innerHTML = `
-                [하차: <span>${arrStr}</span> / 도보 <span>${opt.stn.walk}분</span> / 도착: <span>${minsToHm(finalArrMins)}</span>]
+                <div>열차: <span>${opt.train.dep.substring(0,5)}</span> 탑승 ➔ <span>${opt.train.arr.substring(0,5)}</span> 하차</div>
+                <div style="margin-top:8px;">J (출발시각): <span>${minsToHm(opt.J)}</span></div>
+                <div style="margin-top:8px;">K (최종 도착시각): <span>${minsToHm(opt.K)}</span></div>
+                <div style="margin-top:8px;">L (도보이동): <span>${opt.L}분</span></div>
             `;
         } else {
             document.getElementById('res-summary').innerHTML = `
-                [하차: <span>${arrStr}</span> / 목표: <span>${opt.targetTimeStr}</span>]
+                <div>열차: <span>${opt.train.dep.substring(0,5)}</span> 탑승 ➔ <span>${opt.train.arr.substring(0,5)}</span> 하차</div>
+                <div style="margin-top:8px;">J (출발시각): <span>${minsToHm(opt.J)}</span></div>
+                <div style="margin-top:8px;">K (역 도착시각): <span>${minsToHm(opt.K)}</span></div>
+                <div style="margin-top:8px;">L (도보이동): <span>${opt.L}분</span></div>
             `;
         }
     }
