@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 Premium Master</title>
+    <title>S26 Premium v43.0</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -42,7 +42,7 @@
 <div class="container">
     <div class="header">
         <span>S26 <span style="color:#fff;">Premium</span></span>
-        <span class="badge">UNBREAKABLE ENGINE</span>
+        <span class="badge">v43.0</span>
     </div>
 
     <div class="input-box">
@@ -58,7 +58,7 @@
         <label>목표 도착 시각 (24H)</label>
         <input type="time" id="time" value="14:00">
         
-        <button onclick="startEngine()"><i class="fas fa-subway"></i> 1타 15피 실배차 스캔</button>
+        <button onclick="startEngine()"><i class="fas fa-subway"></i> 배차 스캔 시작</button>
     </div>
 
     <div id="station-selector">
@@ -83,7 +83,7 @@
         <div id="res-meta" style="font-size: 13px; color: #888; border-top: 1px solid #222; padding-top: 15px; line-height: 1.6;"></div>
     </div>
 
-    <div id="log">대기 중... 서버 과부하 방어막 탑재 완료.</div>
+    <div id="log">시스템 대기 중. (v43.0)</div>
 </div>
 
 <script>
@@ -123,7 +123,7 @@
         return `${String(Math.floor(m / 60)).padStart(2,'0')}:${String(m % 60).padStart(2,'0')}`;
     }
 
-    // 이름 정규화 강화 (잠실역 2호선, 잠실(송파구청)역 -> 무조건 '잠실')
+    // 이름 정규화
     function cleanStationName(name) {
         return name.split(' ')[0].split('(')[0].replace(/역$/, '').trim();
     }
@@ -172,12 +172,12 @@
 
                 for(let i=0; i<Math.min(3, stations.length); i++) {
                     let stn = stations[i];
-                    let subMins = 30; // 기본 소요시간 세팅
+                    let subMins = 30;
                     try {
                         const d = new Date();
                         const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                        // 지하철 소요시간 파악용 단일 통신 (가볍게 찌르기)
-                        const probeUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/1/상일동/${encodeURIComponent(stn.name)}/${dateStr}%2012:00:00/1/2/%20/Y`;
+                        // 안정적인 파라미터 적용 (1/5/%20/%20/Y)
+                        const probeUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/1/상일동/${encodeURIComponent(stn.name)}/${encodeURIComponent(dateStr+' 12:00:00')}/1/%20/%20/Y`;
                         const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeUrl)}`);
                         const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
                         
@@ -198,13 +198,11 @@
                 if(!bestRoute) throw new Error("경로를 연산할 수 없습니다.");
                 printLog(`✅ 수학적 최적 경로 선정: [${bestRoute.name}]역 경로`);
 
-                // 1타 15피 실배차 스캔 실행
                 await findRealTrain(bestRoute.name, hmToMins(targetTime), bestRoute.walk, placeName, targetTime, bestRoute.subMins);
                 
             } else {
                 let html = '';
                 stations.slice(0, 5).forEach(s => {
-                    // 모드 B에서는 사용자가 직접 누를 때 임시로 30분을 소요시간(subMins)으로 줍니다.
                     html += `<button class="station-btn" onclick="findRealTrain('${s.name}', ${hmToMins(targetTime)}, ${s.walk}, '${placeName}', '${targetTime}', 30)">
                         <span><i class="fas fa-subway"></i> ${s.name}역</span><span style="color:var(--orange)">도보 ${s.walk}분</span></button>`;
                 });
@@ -214,16 +212,12 @@
         } catch(e) { printLog(`❌ 시스템 에러: ${e.message}`, "#ff453a"); }
     }
 
-    // 핵심: 1타 15피 스캔 & 에러 방어망(Fallback)
+    // 핵심: 배차표 2회 분할 요청 (가장 안정적인 구조)
     async function findRealTrain(stnName, targetMins, walkMins, placeName, targetTimeStr, subMins) {
         document.getElementById('station-selector').style.display = 'none';
         
-        const limitMins = targetMins - walkMins; // 역에 도착해야 하는 마지노선
-        const expectedDepMins = limitMins - subMins; // 예상 탑승 시각
-        
-        // 검색 시작 시간: 예상 탑승 시간보다 30분 전부터 넉넉하게 훑어옵니다.
-        const searchMins = expectedDepMins - 30;
-        const searchTimeStr = minsToHm(searchMins) + ':00';
+        const limitMins = targetMins - walkMins;
+        const expectedDepMins = limitMins - subMins;
         
         const d = new Date();
         const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -232,28 +226,40 @@
         let minDiff = Infinity;
 
         try {
-            printLog(`3. 서울시 서버 접속: [${stnName}] 배차표 15개 일괄 스캔...`);
-            // 한 번의 요청으로 15개의 배차를 쓸어옵니다. (서버 과부하 원천 차단)
-            const url = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/15/상일동/${encodeURIComponent(stnName)}/${dateStr}%20${searchTimeStr}/1/2/%20/Y`;
-            const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(url)}`);
-            const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
+            printLog(`3. 서울시 서버 접속: [${stnName}] 배차표 정밀 스캔...`);
             
-            const paths = xml.getElementsByTagName("path");
+            // 안정적인 스캔을 위해 -40분 지점과 -10분 지점에서 각각 5대씩 호출
+            const offsets = [-40, -10];
             let allTrains = [];
-            
-            for(let i=0; i<paths.length; i++) {
-                let dep = paths[i].getElementsByTagName("trainDptreTm")[0]?.textContent;
-                let arr = paths[i].getElementsByTagName("trainArvlTm")[paths[i].getElementsByTagName("trainArvlTm").length - 1]?.textContent;
-                if(dep && arr) allTrains.push({ dep, arr, arrM: hmToMins(arr), depM: hmToMins(dep) });
+
+            for(let off of offsets) {
+                let reqMins = expectedDepMins + off;
+                let reqTimeStr = minsToHm(reqMins) + ':00';
+                
+                // URL 인코딩 완벽 적용 및 오류 났던 /1/15/ 파라미터를 정상치인 /1/5/ 로 복구
+                let url = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/5/상일동/${encodeURIComponent(stnName)}/${encodeURIComponent(dateStr+' '+reqTimeStr)}/1/%20/%20/Y`;
+                
+                let res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(url)}`);
+                let xmlText = await res.text();
+                let xml = new DOMParser().parseFromString(xmlText, "text/xml");
+                
+                let paths = xml.getElementsByTagName("path");
+                for(let i=0; i<paths.length; i++) {
+                    let dep = paths[i].getElementsByTagName("trainDptreTm")[0]?.textContent;
+                    let arr = paths[i].getElementsByTagName("trainArvlTm")[paths[i].getElementsByTagName("trainArvlTm").length - 1]?.textContent;
+                    
+                    if(dep && arr) {
+                        allTrains.push({ dep, arr, arrM: hmToMins(arr), depM: hmToMins(dep) });
+                    }
+                }
             }
 
             if(allTrains.length > 0) {
                 allTrains.forEach(t => {
-                    let diff = limitMins - t.arrM; // 도착 시간 기준 오차
+                    let diff = limitMins - t.arrM;
                     if(diff < -720) diff += 1440;
                     if(diff > 720) diff -= 1440;
 
-                    // 역 마지노선 이전(diff >= 0)에 가장 가깝게 도착하는 열차 탐색
                     if(diff >= 0 && diff < minDiff) {
                         minDiff = diff;
                         bestTrain = t;
@@ -266,7 +272,6 @@
 
         document.getElementById('result').style.display = 'block';
 
-        // [결과 출력 분기점]
         if(bestTrain) {
             printLog(`✅ 스캔 성공! [${bestTrain.dep} 출발 ➔ ${bestTrain.arr} 하차] 열차 확정`, "#30d158");
             const doorMins = bestTrain.depM - CONFIG.MARGIN;
@@ -278,7 +283,7 @@
                 <span style="color:var(--green)">하차역 실제 도착 예정 시각: ${bestTrain.arr}</span>
             `;
         } else {
-            // [방어막 작동] 서울시 서버가 뻗었을 때 앱을 죽이지 않고 수학적 폴백으로 시간 안내
+            // 이 방어막이 출력된다는 것은 10대의 배차를 긁어왔음에도 데이터가 비어있다는 뜻입니다. (API 완전 마비 상태)
             printLog(`⚠️ 서울시 서버 배차 응답 지연. 정밀 평균 소요시간(${subMins}분)으로 마지노선 대체.`, "#ff9f0a");
             const doorMins = expectedDepMins - CONFIG.MARGIN;
             document.getElementById('res-door').innerText = minsToHm(doorMins);
@@ -291,7 +296,7 @@
         }
     }
 
-    // 기상청 데이터 처리 (HTTPS 완벽 적용)
+    // 기상청 데이터 처리
     async function processKMAWeather(lat, lon, targetH) {
         const grid = dfs_xy_conv(lat, lon);
         const baseDate = new Date().toISOString().slice(0,10).replace(/-/g, '');
@@ -342,7 +347,6 @@
         } catch(e) {}
     }
 
-    // 기상청 격자 변환 함수
     function dfs_xy_conv(v1, v2) {
         const RE = 6371.00877, GRID = 5.0, SLAT1 = 30.0, SLAT2 = 60.0, OLON = 126.0, OLAT = 38.0, XO = 43, YO = 136, DEGRAD = Math.PI / 180.0;
         const re = RE / GRID, slat1 = SLAT1 * DEGRAD, slat2 = SLAT2 * DEGRAD, olon = OLON * DEGRAD, olat = OLAT * DEGRAD;
