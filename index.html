@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>S26 Premium v43.0</title>
+    <title>S26 Premium v44.0</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -42,7 +42,7 @@
 <div class="container">
     <div class="header">
         <span>S26 <span style="color:#fff;">Premium</span></span>
-        <span class="badge">v43.0</span>
+        <span class="badge">v44.0</span>
     </div>
 
     <div class="input-box">
@@ -83,7 +83,7 @@
         <div id="res-meta" style="font-size: 13px; color: #888; border-top: 1px solid #222; padding-top: 15px; line-height: 1.6;"></div>
     </div>
 
-    <div id="log">시스템 대기 중. (v43.0)</div>
+    <div id="log">시스템 대기 중. (v44.0)</div>
 </div>
 
 <script>
@@ -91,7 +91,8 @@
         KAKAO: '56b6a0adbc28cab6f7c87ac9f84b14d0',
         SEOUL: '597057594f6b696d3438526a7a564e',
         KMA: 'ddfd71d0b929827fd9c3c1851b50c301f9afb482a3143c0b39e135f9b3b8f070',
-        PROXY: 'https://script.google.com/macros/s/AKfycbwibkxHe-g8GQc_5vRqJ9RbUhCSA_NOZYhjHCok956Eu2Ufjg05q0O58UXXKQ5dz-UR_g/exec',
+        // https://script.google.com/macros/s/AKfycbxRODYhCj2NupEwxZm7YEigfFM_N_wg5TXUHWGtDvirC_clahAQgx7Z4bT94rJX9fZWtg/exec
+        PROXY: 'https://script.google.com/macros/s/https://script.google.com/macros/s/AKfycbxRODYhCj2NupEwxZm7YEigfFM_N_wg5TXUHWGtDvirC_clahAQgx7Z4bT94rJX9fZWtg/exec/exec',
         MARGIN: 10
     };
 
@@ -133,6 +134,11 @@
         const targetTime = document.getElementById('time').value;
         const mode = document.querySelector('input[name="mode"]:checked').value;
         
+        if (CONFIG.PROXY.includes("새로_배포한")) {
+            printLog("❌ 프록시 주소를 업데이트해야 합니다.", "#ff453a");
+            return;
+        }
+
         document.getElementById('result').style.display = 'none';
         document.getElementById('log').innerHTML = "";
 
@@ -146,7 +152,6 @@
             
             const { x: destX, y: destY, place_name: placeName } = kData.documents[0];
             
-            // 날씨 프로세스
             processKMAWeather(destY, destX, parseInt(targetTime.split(':')[0]));
 
             printLog("2. 주변 지하철역 스캔 및 도보 시간 확보...");
@@ -166,7 +171,7 @@
             });
 
             if (mode === 'A') {
-                printLog(`[모드 A] 상위 3개 역의 지하철+도보 최적경로를 연산합니다...`);
+                printLog(`[모드 A] 상위 3개 역의 최적경로를 연산합니다...`);
                 let bestRoute = null;
                 let minTotalMins = Infinity;
 
@@ -176,10 +181,11 @@
                     try {
                         const d = new Date();
                         const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                        // 안정적인 파라미터 적용 (1/5/%20/%20/Y)
-                        const probeUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/1/상일동/${encodeURIComponent(stn.name)}/${encodeURIComponent(dateStr+' 12:00:00')}/1/%20/%20/Y`;
-                        const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeUrl)}`);
-                        const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
+                        
+                        // [v44.0 버그수정] 프록시 전달 전 이중 인코딩 금지
+                        const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/1/상일동/${stn.name}/${dateStr} 12:00:00/1/%20/%20/Y`;
+                        const probeRes = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeApi)}`);
+                        const xml = new DOMParser().parseFromString(await probeRes.text(), "text/xml");
                         
                         if (xml.getElementsByTagName("resultCode")[0]?.textContent === "00") {
                             subMins = Math.ceil(Number(xml.getElementsByTagName("totalreqHr")[0]?.textContent) / 60);
@@ -212,7 +218,7 @@
         } catch(e) { printLog(`❌ 시스템 에러: ${e.message}`, "#ff453a"); }
     }
 
-    // 핵심: 배차표 2회 분할 요청 (가장 안정적인 구조)
+    // 핵심: 배차표 스캔
     async function findRealTrain(stnName, targetMins, walkMins, placeName, targetTimeStr, subMins) {
         document.getElementById('station-selector').style.display = 'none';
         
@@ -228,7 +234,6 @@
         try {
             printLog(`3. 서울시 서버 접속: [${stnName}] 배차표 정밀 스캔...`);
             
-            // 안정적인 스캔을 위해 -40분 지점과 -10분 지점에서 각각 5대씩 호출
             const offsets = [-40, -10];
             let allTrains = [];
 
@@ -236,10 +241,9 @@
                 let reqMins = expectedDepMins + off;
                 let reqTimeStr = minsToHm(reqMins) + ':00';
                 
-                // URL 인코딩 완벽 적용 및 오류 났던 /1/15/ 파라미터를 정상치인 /1/5/ 로 복구
-                let url = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/5/상일동/${encodeURIComponent(stnName)}/${encodeURIComponent(dateStr+' '+reqTimeStr)}/1/%20/%20/Y`;
-                
-                let res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(url)}`);
+                // [v44.0 버그수정] URL 조합 시 변수에 encodeURIComponent 사용 안 함. 프록시에 보낼 때만 1번 인코딩.
+                let apiUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/5/상일동/${stnName}/${dateStr} ${reqTimeStr}/1/%20/%20/Y`;
+                let res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(apiUrl)}`);
                 let xmlText = await res.text();
                 let xml = new DOMParser().parseFromString(xmlText, "text/xml");
                 
@@ -283,7 +287,6 @@
                 <span style="color:var(--green)">하차역 실제 도착 예정 시각: ${bestTrain.arr}</span>
             `;
         } else {
-            // 이 방어막이 출력된다는 것은 10대의 배차를 긁어왔음에도 데이터가 비어있다는 뜻입니다. (API 완전 마비 상태)
             printLog(`⚠️ 서울시 서버 배차 응답 지연. 정밀 평균 소요시간(${subMins}분)으로 마지노선 대체.`, "#ff9f0a");
             const doorMins = expectedDepMins - CONFIG.MARGIN;
             document.getElementById('res-door').innerText = minsToHm(doorMins);
