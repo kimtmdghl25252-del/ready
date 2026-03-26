@@ -7,52 +7,289 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --bg: #000; --card: #151515; --blue: #0a84ff; --green: #30d158; --red: #ff453a; --text: #fff; --orange: #ff9f0a; --purple: #bf5af2; }
-        body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; padding: 20px; }
-        .container { max-width: 600px; margin: 0 auto; padding-bottom: 50px; }
-        
-        /* 뱃지 우측 정렬 */
-        #header-badge { text-align: right; margin-bottom: 15px; }
-        .badge { font-size: 11px; background: #222; padding: 6px 10px; border-radius: 8px; color: var(--purple); font-weight: bold; letter-spacing: 1px; }
-        
-        .input-box { background: var(--card); border: 1px solid #333; border-radius: 20px; padding: 25px; margin-bottom: 20px; }
-        
-        input[type="text"], input[type="time"] { width: 100%; background: #000; border: 1px solid #444; border-radius: 12px; padding: 18px; color: #fff; font-size: 18px; box-sizing: border-box; margin-bottom: 20px; outline: none; font-weight: bold; text-align: center; }
-        
-        .radio-group { display: flex; gap: 10px; margin-bottom: 20px; }
-        .radio-label { flex: 1; text-align: center; background: #000; border: 1px solid #444; border-radius: 12px; padding: 15px; color: #aaa; font-size: 14px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .radio-label.active { background: var(--blue); color: #fff; border-color: var(--blue); }
-        input[type="radio"] { display: none; }
+        :root {
+            --bg: #000;
+            --card: #151515;
+            --blue: #0a84ff;
+            --green: #30d158;
+            --red: #ff453a;
+            --text: #fff;
+            --orange: #ff9f0a;
+            --purple: #bf5af2;
+        }
 
-        button { width: 100%; padding: 20px; border-radius: 14px; border: none; background: var(--blue); color: #fff; font-weight: 900; font-size: 18px; cursor: pointer; transition: 0.2s; }
-        
-        #station-selector { display: none; margin-bottom: 20px; }
-        .station-btn { background: #222; border: 1px solid #444; color: #fff; padding: 15px; margin-bottom: 10px; border-radius: 12px; text-align: left; display: flex; justify-content: space-between; align-items: center; width: 100%; cursor: pointer; border-left: 4px solid var(--purple); }
-        
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, sans-serif;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding-bottom: 50px;
+            display: grid;
+            grid-template-rows: auto auto auto;
+            gap: 20px;
+        }
+
+        /* 뱃지 우측 정렬 */
+        #header-badge {
+            grid-row: 1;
+            text-align: right;
+            margin-bottom: 10px;
+        }
+
+        .badge {
+            font-size: 11px;
+            background: #222;
+            padding: 6px 10px;
+            border-radius: 8px;
+            color: var(--purple);
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .input-box {
+            grid-row: 2;
+            background: var(--card);
+            border: 1px solid #333;
+            border-radius: 20px;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .input-box input[type="text"],
+        .input-box input[type="time"] {
+            width: 100%;
+            background: #000;
+            border: 1px solid #444;
+            border-radius: 12px;
+            padding: 18px;
+            color: #fff;
+            font-size: 18px;
+            box-sizing: border-box;
+            outline: none;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .radio-label {
+            flex: 1;
+            text-align: center;
+            background: #000;
+            border: 1px solid #444;
+            border-radius: 12px;
+            padding: 15px;
+            color: #aaa;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .radio-label.active {
+            background: var(--blue);
+            color: #fff;
+            border-color: var(--blue);
+        }
+
+        .input-box input[type="radio"] {
+            display: none;
+        }
+
+        .input-box button {
+            width: 100%;
+            padding: 20px;
+            border-radius: 14px;
+            border: none;
+            background: var(--blue);
+            color: #fff;
+            font-weight: 900;
+            font-size: 18px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        #station-selector {
+            display: none;
+            margin-bottom: 20px;
+        }
+
+        .station-btn {
+            background: #222;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 12px;
+            text-align: left;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            cursor: pointer;
+            border-left: 4px solid var(--purple);
+        }
+
         /* 결과 카드 스타일 */
-        .result-card { background: linear-gradient(145deg, #1a1a1c, #000); border: 1px solid var(--blue); border-radius: 24px; padding: 35px 20px; text-align: center; display: none; margin-top: 20px; }
-        .door-time { font-size: 85px; font-weight: 900; color: var(--blue); letter-spacing: -4px; margin: 0 0 5px 0; line-height: 1; }
-        .train-info { font-size: 24px; color: var(--red); font-weight: 900; margin-bottom: 25px; letter-spacing: -1px; }
-        
-        /* 요청하신 요약 정보 스타일 */
-        .summary-info { font-size: 14px; color: #aaa; font-weight: bold; margin-bottom: 25px; background: #111; border: 1px solid #333; border-radius: 12px; padding: 12px; display: inline-block; }
-        .summary-info span { color: var(--green); }
-        
-        .weather-box { background: rgba(255,255,255,0.03); border-radius: 16px; padding: 20px; margin-bottom: 0px; text-align: left; border: 1px solid #222; }
-        .chart-container { position: relative; height: 130px; width: 100%; margin-top: 15px; }
+        .result-card {
+            grid-row: 3;
+            background: linear-gradient(145deg, #1a1a1c, #000);
+            border-radius: 24px;
+            padding: 35px 20px;
+            text-align: center;
+            display: none;
+            margin-top: 20px;
+            display: grid;
+            grid-template-rows: auto auto auto auto auto;
+            gap: 15px;
+        }
+
+        .door-time {
+            grid-row: 1;
+            font-size: 85px;
+            font-weight: 900;
+            color: var(--blue);
+            letter-spacing: -4px;
+            margin: 0;
+            line-height: 1;
+        }
+
+        .train-info {
+            grid-row: 2;
+            font-size: 24px;
+            color: var(--red);
+            font-weight: 900;
+            margin-bottom: 10px;
+            letter-spacing: -1px;
+        }
+
+        /* 요약 정보 스타일 */
+        .summary-info {
+            grid-row: 3;
+            font-size: 14px;
+            color: #aaa;
+            font-weight: bold;
+            margin-bottom: 10px;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 12px;
+            display: inline-block;
+        }
+
+        .summary-info span {
+            color: var(--green);
+        }
+
+        .weather-box {
+            grid-row: 4;
+            background: rgba(255,255,255,0.03);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 0;
+            text-align: left;
+            border: 1px solid #222;
+            display: grid;
+            grid-template-rows: auto auto auto;
+            gap: 10px;
+        }
+
+        /* 기온 제목 스타일 */
+        #w-temp-title {
+            color: var(--orange);
+            font-size: 16px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* 강수 확률 제목 스타일 */
+        #w-pop-title {
+            color: var(--blue);
+            font-size: 13px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 10px;
+        }
+
+        /* 숨겨진 날씨 제목 */
+        .w-header {
+            display: none;
+        }
+
+        .chart-container {
+            grid-row: 3;
+            position: relative;
+            height: 130px;
+            width: 100%;
+            margin-top: 5px;
+        }
 
         /* 로딩 스피너 (뱅글뱅글) */
-        .loader-container { display: none; text-align: center; padding: 40px 0; }
-        .loader { border: 4px solid #222; border-top: 4px solid var(--blue); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 15px auto; }
-        .loader-text { color: var(--blue); font-size: 13px; font-weight: bold; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .loader-container {
+            display: none;
+            text-align: center;
+            padding: 40px 0;
+        }
+
+        .loader {
+            border: 4px solid #222;
+            border-top: 4px solid var(--blue);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px auto;
+        }
+
+        .loader-text {
+            color: var(--blue);
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* 시스템 로그 영역 스타일 */
+        #sys-log {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid #222;
+            padding: 15px;
+            font-family: 'Cascadia Code', monospace;
+            font-size: 12px;
+            color: #ddd;
+            margin-top: 20px;
+            border-radius: 12px;
+            line-height: 1.6;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div id="header-badge">
-        <span class="badge">v55.0</span>
+        <span class="badge">v54.0</span>
     </div>
 
     <div class="input-box">
@@ -64,7 +301,7 @@
         <input type="text" id="dest" value="천호보건지소" placeholder="최종 목적지 입력">
         <input type="time" id="time" value="22:02">
         
-        <button onclick="startEngine()"><i class="fas fa-route"></i> 최적 경로 연산 시작</button>
+        <button onclick="startEngine()"><i class="fas fa-magic"></i> 최적 경로 연산 시작</button>
     </div>
 
     <div id="station-selector">
@@ -83,10 +320,17 @@
         <div id="res-summary" class="summary-info"></div>
         
         <div id="res-weather" class="weather-box">
-            <div id="w-temp" style="font-size: 16px; font-weight: bold; color: #fff;"></div>
-            <div id="w-clothes" style="font-size:13px; color:#ddd; margin-top:10px; line-height:1.6;"></div>
+            <div id="w-temp-title">기온 🌡️: 최저 <span id="w-temp-min">--</span>°C ~ 최고 <span id="w-temp-max">--</span>°C</div>
+            <div id="w-clothes" style="font-size:13px; color:#ddd; margin-top:5px; line-height:1.6;"></div>
+            
+            <div id="w-pop-title">강수 확률 ☔</div>
             <div class="chart-container"><canvas id="rainChart"></canvas></div>
         </div>
+    </div>
+
+    <div id="sys-log">
+        <p>&gt; 시스템 대기 중...</p>
+        <p>&gt; 모드 A 도보시간 연산 통합 완료 (v54.0)</p>
     </div>
 </div>
 
@@ -102,7 +346,11 @@
     let rainChart = null;
     window.tempOptions = [];
 
-    function printLog(msg) { console.log(`[S26] ${msg}`); }
+    function printLog(msg) {
+        const log = document.getElementById('sys-log');
+        log.innerHTML += `<p>&gt; ${msg}</p>`;
+        log.scrollTop = log.scrollHeight;
+    }
 
     function toggleMode() {
         const mode = document.querySelector('input[name="mode"]:checked').value;
@@ -124,8 +372,14 @@
         return `${String(Math.floor(m / 60)).padStart(2,'0')}:${String(m % 60).padStart(2,'0')}`;
     }
 
-    function cleanStationName(name) { return name.split(' ')[0].split('(')[0].replace(/역$/, '').trim(); }
-    function calcRealWalkMins(straightDistance) { return Math.ceil((straightDistance * 1.35) / 67); }
+    function cleanStationName(name) {
+        return name.split(' ')[0].split('(')[0].replace(/역$/, '').trim();
+    }
+
+    function calcWalkingTime(straightDistance) {
+        // 실제 카카오맵 도보 알고리즘 반영 (직선거리 * 1.35 가중치 / 67m/분)
+        return Math.ceil((straightDistance * 1.35) / 67);
+    }
 
     async function startEngine() {
         const dest = document.getElementById('dest').value.trim();
@@ -140,64 +394,102 @@
         document.getElementById('loader').style.display = 'block';
 
         try {
-            const kRes = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(dest)}`, { headers: { Authorization: `KakaoAK ${CONFIG.KAKAO}` }});
+            printLog("카카오 API 목적지 스캔...");
+            const kRes = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(dest)}`, {
+                headers: {
+                    Authorization: `KakaoAK ${CONFIG.KAKAO}`
+                }
+            });
             const kData = await kRes.json();
             if(!kData.documents[0]) throw new Error("장소를 찾을 수 없습니다.");
             
             const { x: destX, y: destY, place_name: placeName } = kData.documents[0];
+            
             processKMAWeather(destY, destX, parseInt(targetTime.split(':')[0]));
 
-            const sRes = await fetch(`https://dapi.kakao.com/v2/local/search/category.json?category_group_code=SW8&x=${destX}&y=${destY}&radius=2000&sort=distance`, { headers: { Authorization: `KakaoAK ${CONFIG.KAKAO}` }});
+            printLog("주변 지하철역 스캔 및 도보 시간 확보...");
+            const sRes = await fetch(`https://dapi.kakao.com/v2/local/search/category.json?category_group_code=SW8&x=${destX}&y=${destY}&radius=2000&sort=distance`, {
+                headers: {
+                    Authorization: `KakaoAK ${CONFIG.KAKAO}`
+                }
+            });
             const sData = await sRes.json();
             
-            let allStations = []; let seen = new Set();
+            let allStations = [];
+            let seen = new Set();
             sData.documents.forEach(d => {
                 let name = cleanStationName(d.place_name); 
-                if (!seen.has(name)) { seen.add(name); allStations.push({ name: name, walk: calcRealWalkMins(d.distance) }); }
+                if (!seen.has(name)) {
+                    seen.add(name);
+                    allStations.push({ name: name, walk: calcWalkingTime(d.distance) });
+                }
             });
 
             const targetMins = hmToMins(targetTime);
 
             if (mode === 'A') {
-                let bestRoute = null; let minTotalMins = Infinity;
+                printLog(`[모드 A] 지하철+도보 합산 최단 경로 연산...`);
+                let bestRoute = null;
+                let minTotalMins = Infinity;
+
                 for(let i=0; i<Math.min(3, allStations.length); i++) {
-                    let stn = allStations[i]; let subMins = 30; 
+                    let stn = allStations[i];
+                    let subMins = 30; 
                     try {
                         const dateStr = new Date().toISOString().slice(0,10);
                         const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/100/상일동/${stn.name}/${dateStr} 12:00:00/1/%20/%20/Y`;
                         const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeApi)}`);
                         const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
-                        if (xml.getElementsByTagName("resultCode")[0]?.textContent === "00") subMins = Math.ceil(Number(xml.getElementsByTagName("totalreqHr")[0]?.textContent) / 60);
+                        if (xml.getElementsByTagName("resultCode")[0]?.textContent === "00") {
+                            subMins = Math.ceil(Number(xml.getElementsByTagName("totalreqHr")[0]?.textContent) / 60);
+                        }
                     } catch(e) {}
+                    
                     let totalRouteMins = subMins + stn.walk;
-                    if (totalRouteMins < minTotalMins) { minTotalMins = totalRouteMins; bestRoute = { ...stn, subMins }; }
+                    if (totalRouteMins < minTotalMins) {
+                        minTotalMins = totalRouteMins;
+                        bestRoute = { ...stn, subMins };
+                    }
                 }
 
                 if(!bestRoute) throw new Error("경로를 연산할 수 없습니다.");
+                printLog(`✅ 최적 경로 자동 선정: [${bestRoute.name}]역`);
+
                 const limitMinsA = targetMins - bestRoute.walk;
                 let train = await fetchRealTrainSilent(bestRoute.name, limitMinsA, bestRoute.subMins);
                 
                 if(train) {
                     renderFinalResult({ stn: bestRoute, c: limitMinsA, d: train.depM, train: train, placeName, targetTime, routeMode: 'A' });
-                } else { throw new Error("서버 응답 오류."); }
+                } else {
+                    throw new Error("서버 배차 응답 오류로 경로를 생성할 수 없습니다.");
+                }
 
             } else {
                 let walk15Stations = allStations.filter(s => s.walk <= 15);
+                
                 if (walk15Stations.length <= 1) {
-                    let stn = allStations[0]; let subMins = 30; 
+                    printLog(`⚠️ 15분 이내 역이 부족하여 모드 A(최단경로 자동)로 전환합니다.`, "#ff9f0a");
+                    // 모드 A와 동일한 폴백 로직
+                    let stn = allStations[0];
+                    let subMins = 30; 
                     try {
                         const dateStr = new Date().toISOString().slice(0,10);
                         const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/100/상일동/${stn.name}/${dateStr} 12:00:00/1/%20/%20/Y`;
                         const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeApi)}`);
                         const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
-                        if (xml.getElementsByTagName("resultCode")[0]?.textContent === "00") subMins = Math.ceil(Number(xml.getElementsByTagName("totalreqHr")[0]?.textContent) / 60);
+                        if (xml.getElementsByTagName("resultCode")[0]?.textContent === "00") {
+                            subMins = Math.ceil(Number(xml.getElementsByTagName("totalreqHr")[0]?.textContent) / 60);
+                        }
                     } catch(e) {}
                     
                     const limitMins = targetMins - stn.walk;
                     let train = await fetchRealTrainSilent(stn.name, limitMins, subMins);
                     if(train) renderFinalResult({ stn: stn, c: limitMins, d: train.depM, train: train, placeName, targetTime, routeMode: 'A' });
+                    
                 } else {
+                    printLog(`[모드 B] 역 ${walk15Stations.length}개 대상 정밀 역산 스캔 시작...`);
                     let validOptions = [];
+
                     for(let stn of walk15Stations.slice(0, 4)) {
                         let subMins = 30; 
                         try {
@@ -205,20 +497,26 @@
                             const probeApi = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/100/상일동/${stn.name}/${dateStr} 12:00:00/1/%20/%20/Y`;
                             const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(probeApi)}`);
                             const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
-                            if (xml.getElementsByTagName("resultCode")[0]?.textContent === "00") subMins = Math.ceil(Number(xml.getElementsByTagName("totalreqHr")[0]?.textContent) / 60);
+                            if (xml.getElementsByTagName("resultCode")[0]?.textContent === "00") {
+                                subMins = Math.ceil(Number(xml.getElementsByTagName("totalreqHr")[0]?.textContent) / 60);
+                            }
                         } catch(e) {}
 
                         let limitMins = targetMins; 
                         let train = await fetchRealTrainSilent(stn.name, limitMins, subMins); 
-                        if(train) validOptions.push({ stn: stn, c: limitMins, d: train.depM, train: train, placeName, targetTime, routeMode: 'B' });
+                        
+                        if(train) {
+                            validOptions.push({ stn: stn, c: limitMins, d: train.depM, train: train, placeName, targetTime, routeMode: 'B' });
+                        }
                     }
 
-                    if(validOptions.length === 0) throw new Error("배차표를 찾을 수 없습니다.");
+                    if(validOptions.length === 0) throw new Error("적합한 배차표를 찾을 수 없습니다.");
+
                     validOptions.sort((a, b) => b.d - a.d);
                     let maxD = validOptions[0].d; 
                     let finalOptions = validOptions.filter(o => o.d >= maxD - 15);
 
-                    // 스피너 종료
+                    // 로딩 스피너 숨김 (스태이션 선택창 또는 결과 카드 표시 전)
                     document.getElementById('loader').style.display = 'none';
 
                     if (finalOptions.length === 1) {
@@ -240,6 +538,7 @@
                         });
                         document.getElementById('station-list').innerHTML = html;
                         document.getElementById('station-selector').style.display = 'block';
+                        printLog("스캔 완료. 원하는 경로를 선택해 주세요.");
                     }
                 }
             }
@@ -253,30 +552,42 @@
         const expectedDepMins = limitMins - subMins;
         const d = new Date();
         const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        
         const offsets = [-30, -15, 0, 10];
         let allTrains = [];
 
         for(let off of offsets) {
             let reqMins = expectedDepMins + off;
             let reqTimeStr = minsToHm(reqMins) + ':00';
+            
             let apiUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/100/상일동/${stnName}/${dateStr} ${reqTimeStr}/1/%20/%20/Y`;
             try {
                 let res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(apiUrl)}`);
                 let xmlText = await res.text();
                 let xml = new DOMParser().parseFromString(xmlText, "text/xml");
+                
                 let deps = xml.getElementsByTagName("trainDptreTm");
                 let arrs = xml.getElementsByTagName("trainArvlTm");
+                
                 if(deps.length > 0 && arrs.length > 0) {
                     allTrains.push({ dep: deps[0].textContent, arr: arrs[arrs.length - 1].textContent, arrM: hmToMins(arrs[arrs.length - 1].textContent), depM: hmToMins(deps[0].textContent) });
                 }
             } catch(e) {}
         }
-        let bestTrain = null; let minDiff = Infinity;
+
+        let bestTrain = null;
+        let minDiff = Infinity;
+
         if(allTrains.length > 0) {
             allTrains.forEach(t => {
                 let diff = limitMins - t.arrM;
-                if(diff < -720) diff += 1440; if(diff > 720) diff -= 1440;
-                if(diff >= 0 && diff < minDiff) { minDiff = diff; bestTrain = t; }
+                if(diff < -720) diff += 1440;
+                if(diff > 720) diff -= 1440;
+
+                if(diff >= 0 && diff < minDiff) {
+                    minDiff = diff;
+                    bestTrain = t;
+                }
             });
         }
         return bestTrain;
@@ -289,7 +600,7 @@
     }
 
     function renderFinalResult(opt) {
-        // 결과 표시 및 로딩 숨김
+        // 로딩 스피너 숨김 (결과 표시 시)
         document.getElementById('loader').style.display = 'none';
         document.getElementById('result').style.display = 'block';
         
@@ -299,7 +610,7 @@
         // 중앙 출발 시간 강조
         document.getElementById('res-train').innerText = minsToHm(opt.d);
         
-        // 요청하신 예쁜 요약 텍스트 바
+        // 요청하신 요약 정보 업데이트
         const arrTimeArr = opt.train.arr.split(':').map(Number);
         const arrMins = arrTimeArr[0] * 60 + arrTimeArr[1];
         const finalArrMins = arrMins + opt.stn.walk;
@@ -307,23 +618,29 @@
         document.getElementById('res-summary').innerHTML = `
             [하차: <span>${opt.train.arr}</span> / 도보 <span>${opt.stn.walk}분</span> / 도착: <span>${minsToHm(finalArrMins)}</span>]
         `;
+        printLog(`최종 확정: [${opt.stn.name}역 도착] 경로 생성 완료.`, "#30d158");
     }
 
     async function processKMAWeather(lat, lon, targetH) {
         const grid = dfs_xy_conv(lat, lon);
         const baseDate = new Date().toISOString().slice(0,10).replace(/-/g, '');
         const url = `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${CONFIG.KMA}&numOfRows=1000&pageNo=1&base_date=${baseDate}&base_time=0200&nx=${grid.nx}&ny=${grid.ny}&dataType=JSON`;
+        
         try {
             const res = await fetch(url);
             const data = await res.json();
             const items = data.response.body.items.item;
             let hourly = {};
             items.forEach(i => { if(!hourly[i.fcstTime]) hourly[i.fcstTime]={}; hourly[i.fcstTime][i.category]=i.fcstValue; });
+            
             const times = Object.keys(hourly).sort().filter(t => parseInt(t.slice(0,2)) >= targetH && parseInt(t.slice(0,2)) <= 22);
             if(times.length === 0) return;
+
             const temps = times.map(t => parseFloat(hourly[t].TMP));
             const pops = times.map(t => parseInt(hourly[t].POP));
-            const minT = Math.round(Math.min(...temps)); const maxT = Math.round(Math.max(...temps));
+            
+            const minT = Math.round(Math.min(...temps));
+            const maxT = Math.round(Math.max(...temps));
 
             const rules = [
                 { min: 28, max: 99, label: "28도 이상", text: "민소매, 반팔, 반바지" },
@@ -335,10 +652,16 @@
                 { min: 5, max: 8, label: "8도 ~ 5도", text: "코트, 가죽자켓, 히트텍" },
                 { min: -99, max: 4, label: "4도 이하", text: "패딩, 두꺼운 코트, 방한용품" }
             ];
-            let recommendations = [];
-            rules.forEach(r => { if (r.min <= maxT && r.max >= minT) recommendations.push(`- <span style="color:var(--orange); font-weight:bold;">${r.label}</span> : ${r.text}`); });
 
-            document.getElementById('w-temp').innerText = `기온: 최저 ${minT}°C ~ 최고 ${maxT}°C`;
+            let recommendations = [];
+            rules.forEach(r => {
+                if (r.min <= maxT && r.max >= minT) {
+                    recommendations.push(`- <span style="color:var(--orange); font-weight:bold;">${r.label}</span> : ${r.text}`);
+                }
+            });
+
+            document.getElementById('w-temp-min').innerText = minT;
+            document.getElementById('w-temp-max').innerText = maxT;
             document.getElementById('w-clothes').innerHTML = `<b>도착 시점 코디 스펙트럼:</b><br>${recommendations.join('<br>')}`;
             
             if(rainChart) rainChart.destroy();
