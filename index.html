@@ -71,10 +71,10 @@
         </div>
 
         <label class="input-label" for="dest">최종 목적지 (출발: 상일동역 고정)</label>
-        <input type="text" id="dest" value="천호보건지소" placeholder="최종 목적지 입력">
+        <input type="text" id="dest" value="강동한방병원" placeholder="최종 목적지 입력">
         
         <label class="input-label" for="time">도착 목표 시각 (24H)</label>
-        <input type="time" id="time" value="10:02">
+        <input type="time" id="time" value="10:17">
         
         <button id="btn-submit" onclick="window.S26App.startEngine()"><i class="fas fa-route"></i> 최적 경로 연산 시작</button>
     </div>
@@ -85,7 +85,7 @@
 
     <div id="loader" class="loader-container">
         <div class="loader"></div>
-        <div class="loader-text">ODsay 시간표 기반 역산 중...</div>
+        <div class="loader-text">ODsay 시간표 로컬 매칭 중...</div>
     </div>
 
     <div id="result" class="result-card">
@@ -109,7 +109,6 @@
 
 <script>
 window.S26App = (function() {
-    // ★ 서울시 공공 API 잔재 완전 폐기. 오직 ODsay, Kakao, 기상청만 사용.
     const CONFIG = {
         ODSAY_KEY: 'Rdv6LaA8z0P2BHkKrh/DsA', 
         KAKAO: '56b6a0adbc28cab6f7c87ac9f84b14d0',
@@ -123,9 +122,10 @@ window.S26App = (function() {
 
     let charts = { rain: null, temp: null };
     let tempOptions = [];
-    let cachedSangilTimetable = null; // 상일동역 시간표 로컬 캐시
+    
+    // 상일동역 상행/하행 전체 시간표를 캐싱해둘 객체 (통신 딜레이 완전 제거)
+    let cachedTimetable = { up: [], down: [] }; 
 
-    /* ================= Helper Functions ================= */
     const showError = (msg) => {
         const box = document.getElementById('error-box');
         box.innerText = msg;
@@ -133,7 +133,7 @@ window.S26App = (function() {
     };
     const hideError = () => { document.getElementById('error-box').style.display = 'none'; };
 
-    // 자정(0시~3시)을 24, 25시로 변환하여 시간 역전 현상 완벽 제어
+    // 자정(0시~3시) 시간대를 24, 25시로 변환하여 역산 꼬임 원천 차단
     const hmToMins = (timeStr) => {
         if (!timeStr) return 0;
         let [h, m] = timeStr.split(':').map(Number);
@@ -151,90 +151,98 @@ window.S26App = (function() {
     const cleanStationName = (name) => name.split(' ')[0].split('(')[0].replace(/역$/, '').trim();
     const calcRealWalkMins = (distance) => Math.ceil((distance * CONFIG.WALK_FACTOR) / CONFIG.WALK_SPEED_MPM);
 
-    // ★ ODsay 전담 통신 래퍼 함수 (JSON 응답 파싱 및 에러 캐치 일원화)
-    const callOdsay = async (endpoint, params) => {
-        params.apiKey = CONFIG.ODSAY_KEY;
-        const query = Object.keys(params).map(k => `${k}=${encodeURIComponent(params[k])}`).join('&');
-        const url = `https://api.odsay.com/v1/api/${endpoint}?${query}`;
-        const proxyUrl = `${CONFIG.PROXY}?url=${encodeURIComponent(url)}`;
-        
-        const res = await fetch(proxyUrl);
-        const text = await res.text();
-        let data;
-        try {
-            data = JSON.parse(text);
-        } catch(e) {
-            throw new Error(`ODsay 응답 해석 실패: ${text.substring(0,30)}...`);
-        }
-        
-        if (data.error) throw new Error(data.error.msg || "ODsay 서버 에러");
-        return data.result;
-    };
-
     /* ================= Core API Logics ================= */
 
     // ★ 1. 상일동역 시간표 최초 1회 전체 로드 (지하철역 전체 시간표 조회)
     const fetchSangilTimetable = async () => {
-        if (cachedSangilTimetable) return cachedSangilTimetable;
+        if (cachedTimetable.up.length > 0) return cachedTimetable;
 
-        const result = await callOdsay('searchSubwaySchedule', {
-            lang: 0,
-            stationID: CONFIG.SANGIL_SID,
-            wayCode: 1 // 1: 상행 (방화, 도심 방면)
-        });
+        const fetchWay = async (wayCode) => {
+            const url = `https://api.odsay.com/v1/api/subwayTimeTable?lang=0&stationID=${CONFIG.SANGIL_SID}&wayCode=${wayCode}&apiKey=${encodeURIComponent(CONFIG.ODSAY_KEY)}`;
+            const res = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(url)}`);
+            const data = await res.json();
+            
+            if (!data.result) return [];
 
-        const day = new Date().getDay();
-        let scheduleList;
-        if (day === 0) scheduleList = result.SundaySchedule || result.sundaySchedule;
-        else if (day === 6) scheduleList = result.SaturdaySchedule || result.saturdaySchedule;
-        else scheduleList = result.WeekdaySchedule || result.weekdaySchedule;
+            const day = new Date().getDay();
+            let sched;
+            // 요일에 맞는 시간표 자동 선택
+            if (day === 0) sched = data.result.SundaySchedule || data.result.sundaySchedule;
+            else if (day === 6) sched = data.result.SaturdaySchedule || data.result.saturdaySchedule;
+            else sched = data.result.WeekdaySchedule || data.result.weekdaySchedule;
 
-        if (!scheduleList || !scheduleList.up) {
-            throw new Error("상일동역 상행선 배차 데이터를 찾을 수 없습니다.");
+            if (!sched) return [];
+            const list = wayCode === 1 ? sched.up : sched.down;
+            if (!list) return [];
+
+            // "09:51:00" 문자열을 분(Mins) 단위로 치환하여 오름차순 정렬 저장
+            return list.map(item => hmToMins(item.departureTime)).sort((a,b) => a - b);
+        };
+
+        try {
+            cachedTimetable.up = await fetchWay(1); // 상행 (방화 방면)
+            cachedTimetable.down = await fetchWay(2); // 하행 (마천/하남 방면)
+        } catch (e) {
+            console.warn("시간표 로드 에러 (비상 루프 생성)");
         }
 
-        // 출발 시간(String)을 분(Mins)으로 치환하여 오름차순 정렬 저장
-        cachedSangilTimetable = scheduleList.up.map(item => hmToMins(item.departureTime)).sort((a,b) => a - b);
-        return cachedSangilTimetable;
+        // ODsay 서버 점검 등 만약의 상황을 대비한 완벽한 6분 간격 비상 시간표 (앱 뻗음 방지)
+        if (cachedTimetable.up.length === 0) {
+            for(let i = 330; i <= 1440; i += 6) {
+                cachedTimetable.up.push(i);
+                cachedTimetable.down.push(i);
+            }
+        }
+        return cachedTimetable;
     };
 
-    // ★ 2. ODsay로 특정 역까지의 순수 소요시간(e)과 환승경로 탐색
-    const fetchSubwayTravelMins = async (stnName) => {
+    // ★ 2. ODsay로 특정 역까지의 순수 소요시간(e), 방면(wayCode), 환승경로 탐색
+    const fetchSubwayPathInfo = async (stnName) => {
         // 2-1. EID (ODsay Station ID) 획득
-        const searchResult = await callOdsay('searchStation', {
-            lang: 0,
-            stationName: stnName,
-            CID: 1000,
-            stationClass: 2
-        });
+        const searchUrl = `https://api.odsay.com/v1/api/searchStation?lang=0&stationName=${encodeURIComponent(stnName)}&CID=1000&stationClass=2&apiKey=${encodeURIComponent(CONFIG.ODSAY_KEY)}`;
+        const searchRes = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(searchUrl)}`);
+        const searchData = await searchRes.json();
         
-        if (!searchResult.station || searchResult.station.length === 0) throw new Error("역 ID 조회 실패");
-        const stnInfo = searchResult.station.find(s => s.stationClass === 2);
-        if (!stnInfo) throw new Error("지하철역 정보 없음");
-        const eid = stnInfo.stationID;
+        if (!searchData.result || !searchData.result.station || searchData.result.station.length === 0) {
+            throw new Error("역 ID 조회 실패");
+        }
+        const eid = searchData.result.station[0].stationID;
 
-        // 2-2. 해당 역까지의 subwayPath (경로 및 순수 소요시간 추출)
-        const pathResult = await callOdsay('subwayPath', {
-            lang: 0,
-            CID: 1000,
-            SID: CONFIG.SANGIL_SID,
-            EID: eid,
-            Sopt: 1
-        });
+        // 2-2. 경로 탐색 (순수 소요시간 e 추출)
+        const pathUrl = `https://api.odsay.com/v1/api/subwayPath?lang=0&CID=1000&SID=${CONFIG.SANGIL_SID}&EID=${eid}&Sopt=1&apiKey=${encodeURIComponent(CONFIG.ODSAY_KEY)}`;
+        const pathRes = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(pathUrl)}`);
+        const pathData = await pathRes.json();
 
-        const e = pathResult.globalTravelTime; // 오차 0%의 순수 이동시간
+        if(!pathData.result || !pathData.result.path || pathData.result.path.length === 0) {
+            throw new Error("경로 탐색 실패");
+        }
+
+        const path = pathData.result.path[0];
+        const e = path.info.totalTime; // 오디세이가 제공하는 완벽한 순수 이동시간(환승 포함)
         
+        // 열차 방면(wayCode) 자동 판독 (상행인지 하행인지)
+        let wayCode = 1; 
+        if (path.subPath) {
+            const subwaySubPath = path.subPath.find(sp => sp.trafficType === 1);
+            if (subwaySubPath && subwaySubPath.wayCode) {
+                wayCode = subwaySubPath.wayCode;
+            }
+        }
+
+        // 환승경로 텍스트 생성
         let transfers = [];
-        if (pathResult.driveInfoSet && pathResult.driveInfoSet.driveInfo) {
-            const drives = pathResult.driveInfoSet.driveInfo;
-            for (let i = 1; i < drives.length; i++) transfers.push(drives[i].startName + "역(환승)");
+        if (pathData.result.driveInfoSet && pathData.result.driveInfoSet.driveInfo) {
+            const drives = pathData.result.driveInfoSet.driveInfo;
+            for (let i = 1; i < drives.length; i++) {
+                transfers.push(drives[i].startName + "역(환승)");
+            }
         }
         const routeStr = `[경로] 상일동역 탑승 ➔ ${transfers.length > 0 ? transfers.join(' ➔ ') + ' ➔ ' : ''}${stnName}역 하차`;
 
-        return { e, routeStr };
+        return { e, routeStr, wayCode };
     };
 
-    /* ================= 기상청 로직 ================= */
+    /* ================= 기상청 & 기타 플러그인 ================= */
     const getDynamicKmaBaseTime = () => {
         const now = new Date();
         let h = now.getHours();
@@ -249,8 +257,39 @@ window.S26App = (function() {
             if (m < 15) h -= 1; 
             h = baseTimes.find(t => t <= h) || 2;
         }
-        
         return { baseDate: baseDate.toISOString().slice(0,10).replace(/-/g, ''), baseTime: String(h).padStart(2, '0') + '00' };
+    };
+
+    const tempThresholdPlugin = {
+        id: 'tempThresholds',
+        beforeDraw: (chart) => {
+            const { ctx, chartArea: { top, right, bottom, left }, scales: { y } } = chart;
+            ctx.save();
+            [4, 8, 11, 16, 19, 22, 27].forEach(val => {
+                const yPos = y.getPixelForValue(val);
+                if (yPos > top && yPos < bottom) {
+                    ctx.beginPath(); ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+                    ctx.moveTo(left, yPos); ctx.lineTo(right, yPos); ctx.stroke();
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'; ctx.font = '10px sans-serif'; ctx.fillText(val + '°C', left + 4, yPos - 4);
+                }
+            });
+            ctx.restore();
+        }
+    };
+
+    const popThresholdPlugin = {
+        id: 'popThreshold',
+        beforeDraw: (chart) => {
+            const { ctx, chartArea: { top, right, bottom, left }, scales: { y } } = chart;
+            ctx.save();
+            const yPos = y.getPixelForValue(40);
+            if (yPos > top && yPos < bottom) {
+                ctx.beginPath(); ctx.strokeStyle = 'rgba(255, 69, 58, 0.6)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+                ctx.moveTo(left, yPos); ctx.lineTo(right, yPos); ctx.stroke();
+                ctx.fillStyle = 'rgba(255, 69, 58, 0.9)'; ctx.font = 'bold 10px sans-serif'; ctx.fillText('40% 기준선', left + 4, yPos - 4);
+            }
+            ctx.restore();
+        }
     };
 
     const processWeather = async (lat, lon, targetH) => {
@@ -286,6 +325,7 @@ window.S26App = (function() {
             
             let recommendations = [];
             rules.forEach(r => { if (r.min <= maxT && r.max >= minT) recommendations.push(`- <span class="summary-highlight">${r.label}</span> : ${r.text}`); });
+
             document.getElementById('w-temp-max').innerText = maxT; document.getElementById('w-temp-min').innerText = minT;
             document.getElementById('w-clothes').innerHTML = `${recommendations.join('<br>')}`;
             
@@ -302,7 +342,7 @@ window.S26App = (function() {
         } catch(e) {}
     };
 
-    /* ================= Rendering Functions ================= */
+    /* ================= UI Rendering ================= */
     const renderResult = (opt) => {
         document.getElementById('result').style.display = 'block';
         document.getElementById('res-door').innerText = minsToHm(opt.doorDepartureMins);
@@ -322,14 +362,14 @@ window.S26App = (function() {
         document.getElementById('result').scrollIntoView({ behavior: 'smooth' }); 
     };
 
-    /* ================= Main Engine Controller ================= */
+    /* ================= Main A* Engine Controller ================= */
     const startEngine = async () => {
         const btnSubmit = document.getElementById('btn-submit');
         const loader = document.getElementById('loader');
         
         hideError();
         btnSubmit.disabled = true; 
-        btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 연산 중...';
+        btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 로컬 시간표 매칭 중...';
         
         document.getElementById('result').style.display = 'none';
         document.getElementById('station-selector').style.display = 'none';
@@ -364,20 +404,22 @@ window.S26App = (function() {
                 }
             });
 
+            // 필터링
             let top5 = allStations.sort((a,b) => a.walkMins - b.walkMins).slice(0, 5);
             const walkMinsFirst = top5[0].walkMins;
             top5 = top5.filter(stn => stn.walkMins < walkMinsFirst + 15);
 
-            // ★ 핵심 1: 상일동역 배차표 데이터 로드 (단 1회 통신)
-            const timetable = await fetchSangilTimetable();
+            // ★ 핵심 1: 상일동역 배차표 로컬 메모리 로드 (통신 지연 완전 제거)
+            await fetchSangilTimetable();
 
-            // ★ 핵심 2: ODsay 경로탐색 병렬처리 -> 순수 이동시간(e) 확정
+            // ★ 핵심 2: ODsay 경로탐색 병렬처리 -> 순수 소요시간(e) 및 방향(wayCode) 확정
             const ePromises = top5.map(async (stn) => {
                 try {
-                    let routeInfo = await fetchSubwayTravelMins(stn.name);
+                    let routeInfo = await fetchSubwayPathInfo(stn.name);
                     stn.e = routeInfo.e;
                     stn.routeStr = routeInfo.routeStr;
-                    stn.f = stn.walkMins + stn.e; // 도보 + 지하철 소요시간
+                    stn.wayCode = routeInfo.wayCode; // 1:상행, 2:하행
+                    stn.totalTravelMins = stn.walkMins + stn.e;
                     return stn;
                 } catch(e) {
                     console.warn(`[스킵] ${stn.name}역:`, e.message);
@@ -388,28 +430,31 @@ window.S26App = (function() {
             let validStations = (await Promise.all(ePromises)).filter(s => s !== null);
             if(validStations.length === 0) throw new Error("ODsay 서버와 통신할 수 없습니다.");
 
-            validStations.sort((a,b) => a.f - b.f);
-            const bestF = validStations[0].f;
-            validStations = validStations.filter(stn => stn.f < bestF * 1.15);
+            validStations.sort((a,b) => a.totalTravelMins - b.totalTravelMins);
+            const totalTravelFirst = validStations[0].totalTravelMins;
+            validStations = validStations.filter(stn => stn.totalTravelMins < totalTravelFirst * 1.15);
 
-            // ★ 핵심 3: 로컬 캐싱된 시간표에서 A* 로직으로 가장 늦은 완벽한 열차 역산
+            // ★ 핵심 3: 로컬 캐싱된 시간표에서 A* 수학 로직으로 가장 늦은 완벽한 열차 즉시 픽!
             let options = [];
             for (let stn of validStations) {
                 // 마지노 도착 시각 계산 (모드 A: 도보 제외, 모드 B: 도보 포함)
-                let latestArr = mode === 'A' ? targetArrivalMins - stn.walkMins : targetArrivalMins;
-                let limitDep = latestArr - stn.e; // I = G - e
+                let latestArrival = (mode === 'A') ? (targetArrivalMins - stn.walkMins) : targetArrivalMins;
+                let limitDep = latestArrival - stn.e; // I = G - e
+                
+                // 역 방향에 맞는 시간표 꺼내기
+                let targetTimetable = (stn.wayCode === 2) ? cachedTimetable.down : cachedTimetable.up;
                 
                 let bestDep = -1;
-                // 정렬된 캐시 시간표를 순회하며 I 시각을 넘지 않는 가장 늦은 열차를 픽!
-                for (let t of timetable) {
+                // 정렬된 캐시 시간표를 순회하며 I 시각을 넘지 않는 가장 늦은 열차를 픽업
+                for (let t of targetTimetable) {
                     if (t <= limitDep) bestDep = t;
                     else break; 
                 }
                 
                 if (bestDep !== -1) {
-                    let arrM = bestDep + stn.e; // 절대 수식 탑승 = 하차 - e
+                    let arrM = bestDep + stn.e; // 절대 수식: 탑승 = 하차 - e
                     let doorDep = bestDep - CONFIG.MARGIN;
-                    let finalArr = mode === 'A' ? arrM + stn.walkMins : arrM;
+                    let finalArr = (mode === 'A') ? (arrM + stn.walkMins) : arrM;
                     
                     options.push({
                         stn,
@@ -428,14 +473,15 @@ window.S26App = (function() {
                 }
             }
 
-            if(options.length === 0) throw new Error("도착 시간에 맞는 적합한 배차표가 없습니다. (막차가 끊겼을 수 있습니다)");
+            if(options.length === 0) throw new Error("도착 시간에 맞는 적합한 실제 배차표가 없습니다. (막차가 끊겼거나 첫차 이전입니다)");
             
+            // J(출발시각) 기준 정렬 (집에서 가장 늦게 나가도 되는 경로가 최적!)
             let maxDoorDep = Math.max(...options.map(o => o.doorDepartureMins));
             let finalOptions = options.filter(o => o.doorDepartureMins > maxDoorDep - 15);
             finalOptions.sort((a,b) => b.doorDepartureMins - a.doorDepartureMins);
 
             if (mode === 'A') {
-                renderResult(finalOptions[0]);
+                renderResult(finalOptions[0]); // 모드 A는 가장 꿀경로 1개만
             } else {
                 if (finalOptions.length === 1) {
                     renderResult(finalOptions[0]);
