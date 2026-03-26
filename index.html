@@ -60,14 +60,14 @@
 
 <div class="container">
     <div id="header-badge">
-        <span class="badge">Master (API Rollback)</span>
+        <span class="badge">Master (Logic Stable)</span>
     </div>
 
     <div id="error-box"></div>
 
     <div class="input-box">
         <div class="radio-group">
-            <label class="radio-label active" id="label-A"><input type="radio" name="mode" value="A" onchange="S26App.toggleMode()"> 목적지로</label>
+            <label class="radio-label active" id="label-A"><input type="radio" name="mode" value="A" checked onchange="S26App.toggleMode()"> 목적지로</label>
             <label class="radio-label" id="label-B"><input type="radio" name="mode" value="B" onchange="S26App.toggleMode()"> 근처역으로</label>
         </div>
 
@@ -110,7 +110,7 @@
 
 <script>
 /**
- * 네임스페이스 오염 방지를 위한 IIFE (즉시 실행 함수) 패턴 적용
+ * S26App: 네임스페이스 패턴 적용 및 기능 모듈화
  */
 const S26App = (function() {
     const CONFIG = {
@@ -207,7 +207,6 @@ const S26App = (function() {
     };
 
     /* ================= Core API Logics ================= */
-    // ★ 롤백: 정상 작동하던 XML 방식의 API로 원상복구하여 에러 해결!
     const fetchSubwayTravelMins = async (stnName) => {
         let e = null; 
         let routeStr = `[경로] 상일동역 탑승 ➔ ${stnName}역 하차`;
@@ -218,13 +217,9 @@ const S26App = (function() {
             const xmlText = await res.text();
             const xml = new DOMParser().parseFromString(xmlText, "text/xml");
 
-            // 순수 이동시간(e) 파싱
             let travelTm = xml.getElementsByTagName("shtTravelTm")[0]?.textContent;
-            if (travelTm) {
-                e = parseInt(travelTm, 10);
-            }
+            if (travelTm) e = parseInt(travelTm, 10);
 
-            // 환승 경로 텍스트 파싱
             let tMsgs = xml.getElementsByTagName("shtTransferMsg");
             if (tMsgs.length > 0 && tMsgs[0].textContent) {
                 let msg = tMsgs[0].textContent;
@@ -235,14 +230,14 @@ const S26App = (function() {
             console.warn(`fetchE Error for ${stnName}:`, err);
         }
         
-        if(e === null) throw new Error("지하철 소요 시간 탐색 실패");
+        if(e === null) throw new Error(`[${stnName}역] 통신 에러 발생`);
         return { subwayTravelMins: e, routeStr };
     };
 
-    // 유저 정의 A* 타임 시프팅 스캔 로직 (무한루프 방어 코드 포함)
+    // 유저 정의 A* 타임 시프팅 스캔 로직 (무한루프 방어 완비)
     const fetchOptimalTrain = async (stnName, latestArrivalAtStation, limitDepMins, subwayTravelMins, routeStr) => {
         const dateStr = new Date().toISOString().slice(0,10);
-        let reqTimeStr = minsToHm(limitDepMins - 30) + ':00'; // 30분 전부터 안전 스캔
+        let reqTimeStr = minsToHm(limitDepMins - 30) + ':00'; // 안전 구간 스캔
         let apiUrl = `http://openapi.seoul.go.kr:8088/${CONFIG.SEOUL}/xml/getShtrmPath/1/15/상일동/${encodeURIComponent(stnName)}/${dateStr} ${reqTimeStr}/1/%20/%20/Y`;
 
         let bestTrain = null;
@@ -258,9 +253,8 @@ const S26App = (function() {
                 let deps = paths[i].getElementsByTagName("trainDptreTm");
                 if (deps.length > 0 && deps[0].textContent) {
                     let depM = hmToMins(deps[0].textContent);
-                    let arrM = depM + subwayTravelMins; // 절대 수식: 하차 = 탑승 + 순수이동시간
+                    let arrM = depM + subwayTravelMins; // 절대 수식 적용
                     
-                    // 마지노선을 지키면서 가장 늦은 최적의 열차
                     if (arrM <= latestArrivalAtStation && depM > bestDepMins) {
                         bestDepMins = depM;
                         bestTrain = {
@@ -404,6 +398,7 @@ const S26App = (function() {
             const mode = document.querySelector('input[name="mode"]:checked').value;
             const targetArrivalMins = hmToMins(targetTimeStr); 
 
+            // 카카오 장소 검색
             const kRes = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(dest)}`, { headers: { Authorization: `KakaoAK ${CONFIG.KAKAO}` }});
             const kData = await kRes.json();
             if(!kData.documents || kData.documents.length === 0) throw new Error(`'${dest}' 장소를 찾을 수 없습니다.`);
@@ -411,6 +406,7 @@ const S26App = (function() {
             
             processWeather(destY, destX, parseInt(targetTimeStr.split(':')[0]));
 
+            // 카카오 역 검색
             const sRes = await fetch(`https://dapi.kakao.com/v2/local/search/category.json?category_group_code=SW8&x=${destX}&y=${destY}&radius=2000&sort=distance`, { headers: { Authorization: `KakaoAK ${CONFIG.KAKAO}` }});
             const sData = await sRes.json();
             if(!sData.documents || sData.documents.length === 0) throw new Error("근처에 지하철역이 존재하지 않습니다.");
@@ -428,6 +424,7 @@ const S26App = (function() {
             const walkMinsFirst = top5[0].walkMins;
             top5 = top5.filter(stn => stn.walkMins < walkMinsFirst + 15);
 
+            // 병렬 처리 적용 (속도 개선 및 에러 통과 방어)
             const ePromises = top5.map(async (stn) => {
                 try {
                     let routeInfo = await fetchSubwayTravelMins(stn.name);
@@ -437,7 +434,7 @@ const S26App = (function() {
                     return stn;
                 } catch(e) {
                     console.warn(e);
-                    return null; 
+                    return null; // 에러 난 역은 제외하고 진행
                 }
             });
             
@@ -464,7 +461,7 @@ const S26App = (function() {
             else {
                 let options = [];
                 const optionPromises = validStations.map(async (bestStation) => {
-                    let latestArrivalAtStation = targetArrivalMins; // 모드 B: 도보 무시
+                    let latestArrivalAtStation = targetArrivalMins; // 모드 B는 도보시간 무시
                     let limitDepMins = latestArrivalAtStation - bestStation.subwayTravelMins;
 
                     let train = await fetchOptimalTrain(bestStation.name, latestArrivalAtStation, limitDepMins, bestStation.subwayTravelMins, bestStation.routeStr);
